@@ -6,7 +6,9 @@ import (
 	"image/color"
 	"image/png"
 	"io/fs"
+	"math"
 	"os"
+	"sync"
 
 	"github.com/charmbracelet/lipgloss"
 	"golang.org/x/image/draw"
@@ -21,6 +23,7 @@ type model struct {
 	Height            int
 	CurrentFrameIndex int
 	Debug             bool
+  Mx *sync.Mutex
 }
 
 type frame struct {
@@ -29,6 +32,7 @@ type frame struct {
 }
 
 func newModel() model {
+  var mx sync.Mutex
 	return model{
 		CurrentFrameIndex: 0,
 		Width:             0,
@@ -36,6 +40,7 @@ func newModel() model {
 		Debug:             true,
 		Dir:               "./input",
 		Frames:            make(map[string]string),
+    Mx: &mx,
 	}
 }
 
@@ -52,7 +57,7 @@ func (m model) loadImages(paths []string) <-chan job {
 		for _, p := range paths {
 			job := job{
 				InputPath: p,
-				Image:     m.readImage(p),
+				Image:     readImage(p),
 			}
 			out <- job
 		}
@@ -65,8 +70,8 @@ func (m model) resizeImages(input <-chan job) <-chan job {
 	out := make(chan job)
 	go func() {
 		for job := range input {
-			job.Image = m.resizeImage(job.Image)
-      out <- job
+			job.Image = resizeImage(job.Image, m.Width, m.Height)
+			out <- job
 		}
 		close(out)
 	}()
@@ -77,14 +82,14 @@ func (m model) imagesToAscii(input <-chan job) <-chan job {
 	out := make(chan job)
 	go func() {
 		for job := range input {
-			job.Ascii = m.imageToAscii(job.Image)
-      out <- job
+			// job.Ascii = imageToAscii3(job.Image, m.Width, m.Height)
+			job.Ascii = imageToAscii3(job.Image)
+			out <- job
 		}
 		close(out)
 	}()
 	return out
 }
-
 
 // WARNING: =========================================================
 func (m model) readFiles() ([]fs.DirEntry, error) {
@@ -99,62 +104,177 @@ func (m model) readFiles() ([]fs.DirEntry, error) {
 }
 
 func (m model) worker(
+	i int,
+	wg *sync.WaitGroup,
 	jobs <-chan job,
 	result chan<- job,
 ) {
-	for j := range jobs {
-		func() {
-
-			result <- frame{
-				Name: j,
-				Data: data,
-			}
-		}()
+	defer wg.Done()
+	// for j := range jobs {
+	// 	j.Image = m.resizeImage(j.Image)
+	// 	j.Ascii = m.imageToAscii(j.Image)
+	//    result <- j
+	// }
+	c2 := m.resizeImages(jobs)
+	c3 := m.imagesToAscii(c2)
+	for j := range c3 {
+		result <- j
 	}
 }
 
-func (m model) readImage(path string) image.Image {
+func readImage(path string) image.Image {
 	file, err := os.Open(path)
-  if err != nil {
-    fmt.Println("CANT READ SHIT");
-    fmt.Println(err);
-  }
+	if err != nil {
+		fmt.Println("CANT READ SHIT")
+		fmt.Println(err)
+	}
 	defer file.Close()
 	img, err := png.Decode(file)
-  if err != nil {
-    fmt.Println("CANT decode SHIT");
-    fmt.Println(path);
-    fmt.Println(err);
-  }
+	if err != nil {
+		fmt.Println("CANT decode SHIT")
+		fmt.Println(path)
+		fmt.Println(err)
+	}
 	return img
 }
 
-func (m model) resizeImage(img image.Image) image.Image {
-	dst := image.NewRGBA(image.Rect(0, 0, m.Width, m.Height))
+func resizeImage(img image.Image, w, h int) image.Image {
+	dst := image.NewRGBA(image.Rect(0, 0, w, h))
 	draw.NearestNeighbor.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Over, nil)
 	return dst
 }
 
-func (m model) imageToAscii(img image.Image) string {
-	res := ""
-	height := m.Height
+func imageToAscii1(img image.Image, ww, h int) string {
+	var wg sync.WaitGroup
+	numWorkers := 4 // Number of concurrent workers
+	chunkSize := h / numWorkers
+	results := make([]string, numWorkers)
 
-	if m.Debug {
-		height = height - 2
+	for w := 0; w < numWorkers; w++ {
+		wg.Add(1)
+		go func(workerID, start, end int) {
+			defer wg.Done()
+			res := ""
+			for i := start; i < end; i++ {
+				for j := 0; j < ww; j++ {
+					color := img.At(j, i)
+					hex := colorToHex(color)
+					if hex == "#000000" {
+						res = res + " "
+					} else {
+						style := lipgloss.NewStyle().Foreground(lipgloss.Color(hex))
+						res = res + style.Render("X")
+					}
+				}
+				res = res + "\n"
+			}
+			results[workerID] = res
+		}(w, w*chunkSize, (w+1)*chunkSize)
 	}
 
-	for i := 0; i < height; i++ {
-		for j := 0; j < m.Width; j++ {
-			color := img.At(j, i)
-			hex := colorToHex(color)
-			if hex == "#000000" {
-				res = res + " "
-			} else {
-				style := lipgloss.NewStyle().Foreground(lipgloss.Color(hex))
-				res = res + style.Render("X")
-			}
+	wg.Wait()
+
+	finalResult := ""
+	for _, result := range results {
+		finalResult += result
+	}
+
+	return finalResult
+}
+
+func imageToAscii2(img image.Image) string {
+	res := ""
+
+	rgbaImg, ok := img.(*image.RGBA)
+	if !ok {
+		panic("Not rgba")
+	}
+
+	bounds := rgbaImg.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	totalPixels := width * height
+
+	for i := 0; i < totalPixels; i++ {
+		x := i % width
+		y := i / width
+		offset := y*rgbaImg.Stride + x*4
+		r, g, b, _ := rgbaImg.Pix[offset], rgbaImg.Pix[offset+1], rgbaImg.Pix[offset+2], rgbaImg.Pix[offset+3]
+		hex := rgbToHex(r, g, b)
+		if hex == "#000000" {
+			res = res + " "
+		} else {
+			style := lipgloss.NewStyle().Foreground(lipgloss.Color(hex))
+			res = res + style.Render("X")
 		}
-		res = res + "\n"
+	}
+
+	return res
+}
+
+func imageToAscii3(img image.Image) string {
+	rgbaImg, ok := img.(*image.RGBA)
+	if !ok {
+		panic("Not rgba")
+	}
+
+	bounds := rgbaImg.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	totalPixels := width * height
+
+	var mx sync.Mutex
+	var wg sync.WaitGroup
+
+	// Divide the total pixels into 4 parts
+	numSegments := 6
+	segmentSize := totalPixels / numSegments
+
+	r := make(map[int]string, numSegments)
+
+	for i := 0; i < numSegments; i++ {
+		start := i * segmentSize
+		end := start + segmentSize
+		if i == numSegments-1 {
+			// Make sure the last segment processes any remaining pixels
+			end = totalPixels
+		}
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			res := ""
+			for i := start; i < end; i++ {
+				x := i % width
+				y := i / width
+				offset := y*rgbaImg.Stride + x*4
+				r, g, b, _ := rgbaImg.Pix[offset], rgbaImg.Pix[offset+1], rgbaImg.Pix[offset+2], rgbaImg.Pix[offset+3]
+				hex := rgbToHex(r, g, b)
+        complementaryHex := rgbToHex(255 - r, 255 - g, 255 -b)
+				if hex == "#000000" {
+					res += " "
+				} else {
+					style := lipgloss.
+						NewStyle().
+						Background(lipgloss.Color(hex)).
+						Foreground(lipgloss.Color(complementaryHex))
+					c := characterFromRgb(r, r, g)
+					res += style.Render(c)
+				}
+				if x == width-1 {
+					res += "\n"
+				}
+			}
+			mx.Lock()
+			r[i] = res
+			mx.Unlock()
+		}(i)
+	}
+
+	wg.Wait()
+
+	res := ""
+	for i := 0; i < numSegments; i++ {
+		res += r[i]
 	}
 
 	return res
@@ -165,66 +285,49 @@ func colorToHex(c color.Color) string {
 	return fmt.Sprintf("#%02x%02x%02x", r>>8, g>>8, b>>8)
 }
 
+func rgbToHex(r, g, b uint8) string {
+	return fmt.Sprintf("#%02x%02x%02x", r, g, b)
+}
 
+const cDensity = ".:-ix|=+%O#@X"
 
-	// case tea.WindowSizeMsg:
-	// 	// NOTE: read files
-	// 	files, err := m.readFiles()
-	// 	if err != nil {
-	// 		m.Error = err
-	// 		return m, nil
-	// 	}
-	//
-	// 	m.Files = files
-	//
-	// 	const numWorkers = 10
-	// 	jobs := make(chan string, len(files))
-	// 	results := make(chan frame, len(files))
-	// 	errChan := make(chan error, 1)
-	//
-	// 	m.Width = message.(tea.WindowSizeMsg).Width
-	// 	m.Height = message.(tea.WindowSizeMsg).Height
-	//
-	// 	var wg sync.WaitGroup
-	//
-	// 	wg.Add(numWorkers)
-	//
-	// 	for w := 0; w < numWorkers; w++ {
-	// 		go func() {
-	// 			defer wg.Done()
-	// 			m.worker(jobs, results, errChan)
-	// 		}()
-	// 	}
-	//
-	// 	go func() {
-	// 		for i := 0; i < len(files); i++ {
-	// 			jobs <- filepath.Join(m.Dir, files[i].Name())
-	// 		}
-	// 		close(jobs)
-	// 	}()
-	//
-	// 	go func() {
-	// 		wg.Wait()
-	// 		close(results)
-	// 	}()
-	//
-	// 	var mx sync.Mutex
-	//
-	// 	wg.Add(len(files))
-	//
-	// 	go func() {
-	// 		for r := range results {
-	// 			// fmt.Println("ADDED")
-	// 			// fmt.Println(r.Name)
-	// 			// fmt.Println(len(r.Data))
-	// 			mx.Lock()
-	// 			m.Frames[r.Name] = r.Data
-	// 			mx.Unlock()
-	// 			wg.Done()
-	// 		}
-	// 	}()
-	//
-	// 	wg.Wait()
-	//
-	// 	fmt.Println("FINISHED")
-	// 	return m, tick()
+func characterFromRgb(r, g, b uint8) string {
+	avgF := float64(int(r)+int(g)+int(b)) / 3.0
+	avg := uint8(math.Round(avgF))
+	len := len(cDensity)
+	i := int(mapValue(avg, 0, 255, 0, uint8(len)))
+	if i >= len {
+		i = len - 1
+	}
+	return string(cDensity[int(i)])
+}
+
+func mapValue(
+	value uint8,
+	minIn uint8,
+	maxIn uint8,
+	minOut uint8,
+	maxOut uint8,
+) uint8 {
+	finalValue := value
+
+	if value > maxIn {
+		finalValue = maxIn
+	} else if value < minIn {
+		finalValue = minIn
+	}
+
+	a := float64(maxIn-finalValue) / float64(maxIn-minIn)
+
+	b := a * float64(maxOut-minOut)
+
+	c := math.Round(b)
+
+	if c < 0 {
+		c = 0
+	} else if c > 255 {
+		c = 255
+	}
+
+	return maxOut - uint8(c)
+}

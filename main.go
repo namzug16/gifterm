@@ -5,15 +5,22 @@ import (
 	"log"
 	"path/filepath"
 	"sort"
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
-type tickMsg time.Time
+const (
+	fps = 24
+)
+
+type frameMsg struct{}
 
 func main() {
+  // channel of results 
+  // channel of screen size
 	p := tea.NewProgram(newModel(), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
@@ -27,7 +34,6 @@ func (m model) Init() tea.Cmd {
 func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := message.(type) {
 	case tea.WindowSizeMsg:
-		// NOTE: read files
 		files, err := m.readFiles()
 		if err != nil {
 			m.Error = err
@@ -51,18 +57,47 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.Width = message.(tea.WindowSizeMsg).Width
 		m.Height = message.(tea.WindowSizeMsg).Height
 
-    //FIX: make this a worker xdxdxdxd
-
 		c1 := m.loadImages(m.Files)
-		c2 := m.resizeImages(c1)
-		c3 := m.imagesToAscii(c2)
+		results := make(chan job)
 
-		for j := range c3 {
-			m.Frames[j.InputPath] = j.Ascii
+		numWorkers := 10
+		var wg sync.WaitGroup
+
+		wg.Add(numWorkers)
+
+		for i := 0; i < numWorkers; i++ {
+			go m.worker(i, &wg, c1, results)
 		}
 
+		go func() {
+			wg.Wait()
+			close(results)
+		}()
+
+		countInitialFrames := fps * 3
+
+		wg.Add(countInitialFrames)
+
+    fmt.Println("Started ", countInitialFrames)
+
+		go func() {
+			for j := range results {
+        m.Mx.Lock()
+				m.Frames[j.InputPath] = j.Ascii
+        m.Mx.Unlock()
+				wg.Done()
+        fmt.Println("Done")
+			}
+		}()
+
+		wg.Wait()
+
+    fmt.Println("finished waiting ")
+
+			// for j := range results {
+			// 	m.Frames[j.InputPath] = j.Ascii
+			// }
 		return m, tick()
-		// return m, nil
 
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -70,12 +105,13 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 
-	case tickMsg:
-		// NOTE: next frame from generated ones
+	case frameMsg:
 		if m.CurrentFrameIndex < len(m.Files) {
 			m.CurrentFrameIndex++
 			return m, tick()
 		} else {
+			// m.CurrentFrameIndex = 0
+			// return m, tick()
 			return m, nil
 		}
 	}
@@ -127,7 +163,7 @@ func (m model) View() string {
 }
 
 func tick() tea.Cmd {
-	return tea.Tick(time.Second/20, func(t time.Time) tea.Msg {
-		return tickMsg(t)
+	return tea.Tick(time.Second/fps, func(t time.Time) tea.Msg {
+		return frameMsg{}
 	})
 }
