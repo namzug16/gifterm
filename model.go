@@ -23,7 +23,7 @@ type model struct {
 	Height            int
 	CurrentFrameIndex int
 	Debug             bool
-  Mx *sync.Mutex
+	Mx                *sync.Mutex
 }
 
 type frame struct {
@@ -32,7 +32,7 @@ type frame struct {
 }
 
 func newModel() model {
-  var mx sync.Mutex
+	var mx sync.Mutex
 	return model{
 		CurrentFrameIndex: 0,
 		Width:             0,
@@ -40,7 +40,7 @@ func newModel() model {
 		Debug:             true,
 		Dir:               "./input",
 		Frames:            make(map[string]string),
-    Mx: &mx,
+		Mx:                &mx,
 	}
 }
 
@@ -82,8 +82,7 @@ func (m model) imagesToAscii(input <-chan job) <-chan job {
 	out := make(chan job)
 	go func() {
 		for job := range input {
-			// job.Ascii = imageToAscii3(job.Image, m.Width, m.Height)
-			job.Ascii = imageToAscii3(job.Image)
+			job.Ascii = imageToAscii(job.Image)
 			out <- job
 		}
 		close(out)
@@ -110,11 +109,6 @@ func (m model) worker(
 	result chan<- job,
 ) {
 	defer wg.Done()
-	// for j := range jobs {
-	// 	j.Image = m.resizeImage(j.Image)
-	// 	j.Ascii = m.imageToAscii(j.Image)
-	//    result <- j
-	// }
 	c2 := m.resizeImages(jobs)
 	c3 := m.imagesToAscii(c2)
 	for j := range c3 {
@@ -144,9 +138,12 @@ func resizeImage(img image.Image, w, h int) image.Image {
 	return dst
 }
 
-func imageToAscii1(img image.Image, ww, h int) string {
+func imageToAscii(img image.Image) string {
+	ww := img.Bounds().Max.X
+	h := img.Bounds().Max.Y
+
 	var wg sync.WaitGroup
-	numWorkers := 4 // Number of concurrent workers
+	numWorkers := 4
 	chunkSize := h / numWorkers
 	results := make([]string, numWorkers)
 
@@ -158,12 +155,24 @@ func imageToAscii1(img image.Image, ww, h int) string {
 			for i := start; i < end; i++ {
 				for j := 0; j < ww; j++ {
 					color := img.At(j, i)
-					hex := colorToHex(color)
+					rr, gg, bb, _ := color.RGBA()
+					r := uint8(rr)
+					g := uint8(gg)
+					b := uint8(bb)
+					hex := rgbToHex(r, g, b)
+					complementaryHex := rgbToHex(255-r, 255-g, 255-b)
 					if hex == "#000000" {
-						res = res + " "
+						style := lipgloss.
+							NewStyle().
+							Foreground(lipgloss.Color("#FFFFFF"))
+						res += style.Render(string(cDensity[0]))
 					} else {
-						style := lipgloss.NewStyle().Foreground(lipgloss.Color(hex))
-						res = res + style.Render("X")
+						style := lipgloss.
+							NewStyle().
+							Background(lipgloss.Color(hex)).
+							Foreground(lipgloss.Color(complementaryHex))
+						c := characterFromRgb(r, r, g)
+						res += style.Render(c)
 					}
 				}
 				res = res + "\n"
@@ -180,104 +189,6 @@ func imageToAscii1(img image.Image, ww, h int) string {
 	}
 
 	return finalResult
-}
-
-func imageToAscii2(img image.Image) string {
-	res := ""
-
-	rgbaImg, ok := img.(*image.RGBA)
-	if !ok {
-		panic("Not rgba")
-	}
-
-	bounds := rgbaImg.Bounds()
-	width := bounds.Dx()
-	height := bounds.Dy()
-	totalPixels := width * height
-
-	for i := 0; i < totalPixels; i++ {
-		x := i % width
-		y := i / width
-		offset := y*rgbaImg.Stride + x*4
-		r, g, b, _ := rgbaImg.Pix[offset], rgbaImg.Pix[offset+1], rgbaImg.Pix[offset+2], rgbaImg.Pix[offset+3]
-		hex := rgbToHex(r, g, b)
-		if hex == "#000000" {
-			res = res + " "
-		} else {
-			style := lipgloss.NewStyle().Foreground(lipgloss.Color(hex))
-			res = res + style.Render("X")
-		}
-	}
-
-	return res
-}
-
-func imageToAscii3(img image.Image) string {
-	rgbaImg, ok := img.(*image.RGBA)
-	if !ok {
-		panic("Not rgba")
-	}
-
-	bounds := rgbaImg.Bounds()
-	width := bounds.Dx()
-	height := bounds.Dy()
-	totalPixels := width * height
-
-	var mx sync.Mutex
-	var wg sync.WaitGroup
-
-	// Divide the total pixels into 4 parts
-	numSegments := 6
-	segmentSize := totalPixels / numSegments
-
-	r := make(map[int]string, numSegments)
-
-	for i := 0; i < numSegments; i++ {
-		start := i * segmentSize
-		end := start + segmentSize
-		if i == numSegments-1 {
-			// Make sure the last segment processes any remaining pixels
-			end = totalPixels
-		}
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			res := ""
-			for i := start; i < end; i++ {
-				x := i % width
-				y := i / width
-				offset := y*rgbaImg.Stride + x*4
-				r, g, b, _ := rgbaImg.Pix[offset], rgbaImg.Pix[offset+1], rgbaImg.Pix[offset+2], rgbaImg.Pix[offset+3]
-				hex := rgbToHex(r, g, b)
-        complementaryHex := rgbToHex(255 - r, 255 - g, 255 -b)
-				if hex == "#000000" {
-					res += " "
-				} else {
-					style := lipgloss.
-						NewStyle().
-						Background(lipgloss.Color(hex)).
-						Foreground(lipgloss.Color(complementaryHex))
-					c := characterFromRgb(r, r, g)
-					res += style.Render(c)
-				}
-				if x == width-1 {
-					res += "\n"
-				}
-			}
-			mx.Lock()
-			r[i] = res
-			mx.Unlock()
-		}(i)
-	}
-
-	wg.Wait()
-
-	res := ""
-	for i := 0; i < numSegments; i++ {
-		res += r[i]
-	}
-
-	return res
 }
 
 func colorToHex(c color.Color) string {

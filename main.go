@@ -19,8 +19,6 @@ const (
 type frameMsg struct{}
 
 func main() {
-  // channel of results 
-  // channel of screen size
 	p := tea.NewProgram(newModel(), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
@@ -60,7 +58,7 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		c1 := m.loadImages(m.Files)
 		results := make(chan job)
 
-		numWorkers := 10
+		numWorkers := 30
 		var wg sync.WaitGroup
 
 		wg.Add(numWorkers)
@@ -74,29 +72,30 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			close(results)
 		}()
 
-		countInitialFrames := fps * 3
+		// countInitialFrames := fps * 3
+		//
+		// wg.Add(countInitialFrames)
+		//
+		//   fmt.Println("Started ", countInitialFrames)
+		//
+		// go func() {
+		// 	for j := range results {
+		//       m.Mx.Lock()
+		// 		m.Frames[j.InputPath] = j.Ascii
+		//       m.Mx.Unlock()
+		// 		wg.Done()
+		//       fmt.Println("Done")
+		// 	}
+		// }()
+		//
+		// wg.Wait()
+		//
+		//   fmt.Println("finished waiting ")
 
-		wg.Add(countInitialFrames)
+		for j := range results {
+			m.Frames[j.InputPath] = j.Ascii
+		}
 
-    fmt.Println("Started ", countInitialFrames)
-
-		go func() {
-			for j := range results {
-        m.Mx.Lock()
-				m.Frames[j.InputPath] = j.Ascii
-        m.Mx.Unlock()
-				wg.Done()
-        fmt.Println("Done")
-			}
-		}()
-
-		wg.Wait()
-
-    fmt.Println("finished waiting ")
-
-			// for j := range results {
-			// 	m.Frames[j.InputPath] = j.Ascii
-			// }
 		return m, tick()
 
 	case tea.KeyMsg:
@@ -110,9 +109,9 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.CurrentFrameIndex++
 			return m, tick()
 		} else {
-			// m.CurrentFrameIndex = 0
-			// return m, tick()
-			return m, nil
+			m.CurrentFrameIndex = 0
+			return m, tick()
+			// return m, nil
 		}
 	}
 

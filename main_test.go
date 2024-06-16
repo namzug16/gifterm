@@ -9,85 +9,21 @@ import (
 )
 
 func TestIndexCharacter(t *testing.T) {
-  r := uint8(200)
-  g := uint8(120)
-  b := uint8(200)
+	r := uint8(200)
+	g := uint8(120)
+	b := uint8(200)
 
-  c := characterFromRgb(r, g, b)
+	c := characterFromRgb(r, g, b)
 
-  t.Log("CHARACTER : ", c)
+	t.Log("CHARACTER : ", c)
 }
 
-func ProcessingSingleImage(t *testing.T) {
-	start := time.Now()
-
-  t.Log("STARTED")
-
+func TestProcessingSingleImageAscii(t *testing.T) {
 	img := readImage("input/frame_0001.png")
-
-  stop := time.Since(start)
-  start = time.Now()
-
-  t.Log("Image read; ", stop)
-
-	w := 144
-	h := 144
-
-	resizedImg := resizeImage(img, w, h)
-
-  stop = time.Since(start)
-  start = time.Now()
-
-  t.Log("Image resized; ", stop)
-
-	imageToAscii1(resizedImg, w, h)
-
-  stop = time.Since(start)
-  start = time.Now()
-
-  t.Log("Image ascii 1; ", stop)
-
-	imageToAscii2(resizedImg)
-
-  stop = time.Since(start)
-  start = time.Now()
-
-  t.Log("Image ascii 2; ", stop)
-
-	imageToAscii3(resizedImg)
-
-  stop = time.Since(start)
-
-  t.Log("Image ascii 3; ", stop)
-}
-
-func ProcessingSingleImage2(t *testing.T) {
 	start := time.Now()
-
-  t.Log("STARTED")
-
-	img := readImage("input/frame_0001.png")
-
-  stop := time.Since(start)
-  start = time.Now()
-
-  t.Log("Image read; ", stop)
-
-	w := 144
-	h := 144
-
-	resizedImg := resizeImage(img, w, h)
-
-  stop = time.Since(start)
-  start = time.Now()
-
-  t.Log("Image resized; ", stop)
-
-	imageToAscii3(resizedImg)
-
-  stop = time.Since(start)
-
-  t.Log("Image ascii 3; ", stop)
+	imageToAscii(img)
+	stop := time.Since(start)
+	t.Log("Image ascii: ", stop)
 }
 
 func ProcessingImageTime(t *testing.T) {
