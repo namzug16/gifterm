@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"path/filepath"
@@ -16,10 +17,97 @@ const (
 	fps = 24
 )
 
+type loadingMsg struct {
+	p int
+}
+
+type playMsg struct {
+	m model
+}
+
+type updateFramesMsg struct {
+	frames map[string]string
+	files  []string
+}
+
 type frameMsg struct{}
 
 func main() {
-	p := tea.NewProgram(newModel(), tea.WithAltScreen())
+	dir := "input/"
+
+	windowSizeChan := make(chan tea.WindowSizeMsg)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	m := newModel(
+		windowSizeChan,
+	)
+
+	p := tea.NewProgram(m, tea.WithAltScreen())
+
+	go func(m *model) {
+		files, _ := readFiles(dir)
+
+		var fileNames []string
+
+		for _, file := range files {
+			if !file.IsDir() && filepath.Ext(file.Name()) == ".png" {
+				fileNames = append(fileNames, dir+file.Name())
+			}
+		}
+
+		sort.Slice(fileNames, func(i, j int) bool {
+			return fileNames[i] < fileNames[j]
+		})
+
+		for size := range windowSizeChan {
+			cancel()
+			ctx, cancel = context.WithCancel(context.Background())
+
+			go func(size tea.WindowSizeMsg) {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					c1 := loadImages(fileNames)
+					results := make(chan job)
+
+					numWorkers := 10
+					var wg sync.WaitGroup
+
+					wg.Add(numWorkers)
+
+					for i := 0; i < numWorkers; i++ {
+						go worker(i, &wg, c1, results, size.Width, size.Height)
+					}
+
+					go func() {
+						wg.Wait()
+						close(results)
+					}()
+
+					go func() {
+						frames := make(map[string]string)
+
+						for j := range results {
+							frames[j.InputPath] = j.Ascii
+							pe := int((float32(len(frames)) / float32(len(fileNames))) * 100)
+							p.Send(loadingMsg{
+								p: pe,
+							})
+						}
+
+						m.Files = fileNames
+						m.Frames = frames
+
+						p.Send(playMsg{
+							m: *m,
+						})
+					}()
+				}
+			}(size)
+		}
+	}(&m)
+
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}
@@ -32,77 +120,32 @@ func (m model) Init() tea.Cmd {
 func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := message.(type) {
 	case tea.WindowSizeMsg:
-		files, err := m.readFiles()
-		if err != nil {
-			m.Error = err
-			return m, nil
-		}
-
-		var fileNames []string
-
-		for _, file := range files {
-			if !file.IsDir() && filepath.Ext(file.Name()) == ".png" {
-				fileNames = append(fileNames, m.Dir+"/"+file.Name())
+		m.WindowSizeChan <- msg
+		return m.reset(), func() tea.Msg {
+			return loadingMsg{
+				p: 0,
 			}
 		}
-
-		sort.Slice(fileNames, func(i, j int) bool {
-			return fileNames[i] < fileNames[j]
-		})
-
-		m.Files = fileNames
-
-		m.Width = message.(tea.WindowSizeMsg).Width
-		m.Height = message.(tea.WindowSizeMsg).Height
-
-		c1 := m.loadImages(m.Files)
-		results := make(chan job)
-
-		numWorkers := 30
-		var wg sync.WaitGroup
-
-		wg.Add(numWorkers)
-
-		for i := 0; i < numWorkers; i++ {
-			go m.worker(i, &wg, c1, results)
-		}
-
-		go func() {
-			wg.Wait()
-			close(results)
-		}()
-
-		// countInitialFrames := fps * 3
-		//
-		// wg.Add(countInitialFrames)
-		//
-		//   fmt.Println("Started ", countInitialFrames)
-		//
-		// go func() {
-		// 	for j := range results {
-		//       m.Mx.Lock()
-		// 		m.Frames[j.InputPath] = j.Ascii
-		//       m.Mx.Unlock()
-		// 		wg.Done()
-		//       fmt.Println("Done")
-		// 	}
-		// }()
-		//
-		// wg.Wait()
-		//
-		//   fmt.Println("finished waiting ")
-
-		for j := range results {
-			m.Frames[j.InputPath] = j.Ascii
-		}
-
-		return m, tick()
 
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "esc", "ctrl+c":
 			return m, tea.Quit
 		}
+
+	case playMsg:
+		return msg.m, func() tea.Msg {
+			return frameMsg{}
+		}
+
+	case loadingMsg:
+		m.LoadingPercentage = msg.p
+		return m, nil
+
+	case updateFramesMsg:
+		m.Frames = msg.frames
+		m.Files = msg.files
+		return m, nil
 
 	case frameMsg:
 		if m.CurrentFrameIndex < len(m.Files) {
@@ -121,20 +164,12 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) View() string {
 	res := ""
 
-	if m.Error != nil {
-		style := lipgloss.NewStyle().Foreground(lipgloss.Color("#0000FF"))
-		return style.Render(m.Error.Error())
-	}
-
-	if m.Debug {
-		style := lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00"))
-		res = res + style.Render(fmt.Sprintf("Width: %d, Height: %d, Files count: %d Current frame: %d, Frames count: %d\n", m.Width, m.Height, len(m.Files), m.CurrentFrameIndex, len(m.Frames)))
-		// NOTE: height needs to be reduce so that debug is shown
-	}
-
 	if len(m.Frames) == 0 {
 		style := lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00"))
-		res = res + style.Render("Files is fucking empty bro\n")
+		res += "Loading your frames... "
+		res += fmt.Sprintf("%d", m.LoadingPercentage)
+		res += "%"
+		res = style.Render(res)
 	} else if len(m.Frames) == m.CurrentFrameIndex {
 		frameName := m.Files[m.CurrentFrameIndex-1]
 
@@ -144,10 +179,6 @@ func (m model) View() string {
 	} else {
 
 		frameName := m.Files[m.CurrentFrameIndex]
-
-		if m.Debug {
-			res += frameName + "\n"
-		}
 
 		frame := m.Frames[frameName]
 
@@ -166,3 +197,51 @@ func tick() tea.Cmd {
 		return frameMsg{}
 	})
 }
+
+// countInitialFrames := fps * 5
+//
+// if countInitialFrames > len(fileNames) {
+// 	countInitialFrames = len(fileNames)
+// }
+// go func() {
+// 	c := countInitialFrames
+// 	isFirst := true
+// 	frames := make(map[string]string)
+// 	for j := range results {
+// 		frames[j.InputPath] = j.Ascii
+// 		if isFirst {
+// 			if c > 0 {
+// 				c--
+// 				pe := int((float32(len(frames)) / float32(countInitialFrames)) * 100)
+// 				p.Send(loadingMsg{
+// 					p: pe,
+// 				})
+// 				if c == 0 && countInitialFrames == len(fileNames) {
+// 					m.Files = fileNames
+// 					m.Frames = frames
+// 					p.Send(playMsg{
+// 						m: *m,
+// 					})
+// 				}
+// 			} else {
+// 				isFirst = false
+// 				c = fps
+// 				m.Files = fileNames
+// 				m.Frames = frames
+// 				p.Send(playMsg{
+// 					m: *m,
+// 				})
+// 			}
+// 		} else {
+// 			if c > 0 {
+// 				c--
+// 			} else {
+// 				p.Send(updateFramesMsg{
+// 					frames: frames,
+// 					files:  fileNames,
+// 				})
+// 				c = fps
+// 			}
+// 		}
+// 	}
+// }()

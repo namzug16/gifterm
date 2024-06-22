@@ -10,20 +10,17 @@ import (
 	"os"
 	"sync"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"golang.org/x/image/draw"
 )
 
 type model struct {
-	Error             error
 	Frames            map[string]string
-	Dir               string
 	Files             []string
-	Width             int
-	Height            int
 	CurrentFrameIndex int
-	Debug             bool
-	Mx                *sync.Mutex
+	LoadingPercentage int
+	WindowSizeChan    chan tea.WindowSizeMsg
 }
 
 type frame struct {
@@ -31,16 +28,21 @@ type frame struct {
 	Data string
 }
 
-func newModel() model {
-	var mx sync.Mutex
+func newModel(
+	windowSizeChan chan tea.WindowSizeMsg,
+) model {
 	return model{
 		CurrentFrameIndex: 0,
-		Width:             0,
-		Height:            0,
-		Debug:             true,
-		Dir:               "./input",
 		Frames:            make(map[string]string),
-		Mx:                &mx,
+		WindowSizeChan:    windowSizeChan,
+	}
+}
+
+func (m model) reset() model {
+	return model{
+		CurrentFrameIndex: 0,
+		Frames:            make(map[string]string),
+		WindowSizeChan:    m.WindowSizeChan,
 	}
 }
 
@@ -51,7 +53,7 @@ type job struct {
 }
 
 // WARNING: CHANNELS =========================================================
-func (m model) loadImages(paths []string) <-chan job {
+func loadImages(paths []string) <-chan job {
 	out := make(chan job)
 	go func() {
 		for _, p := range paths {
@@ -66,11 +68,11 @@ func (m model) loadImages(paths []string) <-chan job {
 	return out
 }
 
-func (m model) resizeImages(input <-chan job) <-chan job {
+func resizeImages(input <-chan job, w, h int) <-chan job {
 	out := make(chan job)
 	go func() {
 		for job := range input {
-			job.Image = resizeImage(job.Image, m.Width, m.Height)
+			job.Image = resizeImage(job.Image, w, h)
 			out <- job
 		}
 		close(out)
@@ -78,7 +80,7 @@ func (m model) resizeImages(input <-chan job) <-chan job {
 	return out
 }
 
-func (m model) imagesToAscii(input <-chan job) <-chan job {
+func imagesToAscii(input <-chan job) <-chan job {
 	out := make(chan job)
 	go func() {
 		for job := range input {
@@ -91,8 +93,8 @@ func (m model) imagesToAscii(input <-chan job) <-chan job {
 }
 
 // WARNING: =========================================================
-func (m model) readFiles() ([]fs.DirEntry, error) {
-	files, err := os.ReadDir(m.Dir)
+func readFiles(dir string) ([]fs.DirEntry, error) {
+	files, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("cannot read input directory. %w", err)
 	}
@@ -102,15 +104,17 @@ func (m model) readFiles() ([]fs.DirEntry, error) {
 	return files, nil
 }
 
-func (m model) worker(
+func worker(
 	i int,
 	wg *sync.WaitGroup,
 	jobs <-chan job,
 	result chan<- job,
+	w,
+	h int,
 ) {
 	defer wg.Done()
-	c2 := m.resizeImages(jobs)
-	c3 := m.imagesToAscii(c2)
+	c2 := resizeImages(jobs, w, h)
+	c3 := imagesToAscii(c2)
 	for j := range c3 {
 		result <- j
 	}
@@ -138,7 +142,13 @@ func resizeImage(img image.Image, w, h int) image.Image {
 	return dst
 }
 
+var style = lipgloss.NewStyle()
+
 func imageToAscii(img image.Image) string {
+	if img == nil {
+		return ""
+	}
+
 	ww := img.Bounds().Max.X
 	h := img.Bounds().Max.Y
 
@@ -154,25 +164,23 @@ func imageToAscii(img image.Image) string {
 			res := ""
 			for i := start; i < end; i++ {
 				for j := 0; j < ww; j++ {
-					color := img.At(j, i)
-					rr, gg, bb, _ := color.RGBA()
+					co := img.At(j, i)
+					rr, gg, bb, _ := co.RGBA()
 					r := uint8(rr)
 					g := uint8(gg)
 					b := uint8(bb)
 					hex := rgbToHex(r, g, b)
-					complementaryHex := rgbToHex(255-r, 255-g, 255-b)
+					c := characterFromRgb(r, g, b)
 					if hex == "#000000" {
-						style := lipgloss.
-							NewStyle().
+						s := style.
 							Foreground(lipgloss.Color("#FFFFFF"))
-						res += style.Render(string(cDensity[0]))
+						res += s.Render(string(cDensity[0]))
 					} else {
-						style := lipgloss.
-							NewStyle().
+						complementaryHex := rgbToHex(255-r, 255-g, 255-b)
+						s := style.
 							Background(lipgloss.Color(hex)).
 							Foreground(lipgloss.Color(complementaryHex))
-						c := characterFromRgb(r, r, g)
-						res += style.Render(c)
+						res += s.Render(c)
 					}
 				}
 				res = res + "\n"
@@ -200,7 +208,7 @@ func rgbToHex(r, g, b uint8) string {
 	return fmt.Sprintf("#%02x%02x%02x", r, g, b)
 }
 
-const cDensity = ".:-ix|=+%O#@X"
+const cDensity = ".,:-=i|%O#@$X"
 
 func characterFromRgb(r, g, b uint8) string {
 	avgF := float64(int(r)+int(g)+int(b)) / 3.0
