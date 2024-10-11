@@ -1,11 +1,8 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
-	"path/filepath"
-	"sort"
 	"sync"
 	"time"
 
@@ -14,7 +11,7 @@ import (
 )
 
 const (
-	fps = 24
+	fps = 12
 )
 
 type loadingMsg struct {
@@ -25,18 +22,18 @@ type playMsg struct {
 	m model
 }
 
-type updateFramesMsg struct {
-	frames map[string]string
-	files  []string
-}
+// type updateFramesMsg struct {
+// 	frames map[string]string
+// 	files  []string
+// }
 
 type frameMsg struct{}
 
 func main() {
-	dir := "input/"
+	gifPath := "output.gif"
 
 	windowSizeChan := make(chan tea.WindowSizeMsg)
-	ctx, cancel := context.WithCancel(context.Background())
+	// ctx, cancel := context.WithCancel(context.Background())
 
 	m := newModel(
 		windowSizeChan,
@@ -45,68 +42,52 @@ func main() {
 	p := tea.NewProgram(m, tea.WithAltScreen())
 
 	go func(m *model) {
-		files, _ := readFiles(dir)
+		images, err := readGif(gifPath)
+		// FIX: handle error
+		if err != nil {
+			return
+		}
 
-		var fileNames []string
+		size := <-windowSizeChan
 
-		for _, file := range files {
-			if !file.IsDir() && filepath.Ext(file.Name()) == ".png" {
-				fileNames = append(fileNames, dir+file.Name())
+		go func(size tea.WindowSizeMsg) {
+			c1 := chanFromImages(images)
+			results := make(chan job)
+
+			numWorkers := 10
+			var wg sync.WaitGroup
+
+			wg.Add(numWorkers)
+
+			for i := 0; i < numWorkers; i++ {
+				go worker(i, &wg, c1, results, size.Width, size.Height)
 			}
-		}
 
-		sort.Slice(fileNames, func(i, j int) bool {
-			return fileNames[i] < fileNames[j]
-		})
+			go func() {
+				wg.Wait()
+				close(results)
+			}()
 
-		for size := range windowSizeChan {
-			cancel()
-			ctx, cancel = context.WithCancel(context.Background())
+			go func() {
+				frames := make(map[int]string)
 
-			go func(size tea.WindowSizeMsg) {
-				select {
-				case <-ctx.Done():
-					return
-				default:
-					c1 := loadImages(fileNames)
-					results := make(chan job)
-
-					numWorkers := 10
-					var wg sync.WaitGroup
-
-					wg.Add(numWorkers)
-
-					for i := 0; i < numWorkers; i++ {
-						go worker(i, &wg, c1, results, size.Width, size.Height)
-					}
-
-					go func() {
-						wg.Wait()
-						close(results)
-					}()
-
-					go func() {
-						frames := make(map[string]string)
-
-						for j := range results {
-							frames[j.InputPath] = j.Ascii
-							pe := int((float32(len(frames)) / float32(len(fileNames))) * 100)
-							p.Send(loadingMsg{
-								p: pe,
-							})
-						}
-
-						m.Files = fileNames
-						m.Frames = frames
-
-						p.Send(playMsg{
-							m: *m,
-						})
-					}()
+				for j := range results {
+					frames[j.Index] = j.Ascii
+					pe := int((float32(len(frames)) / float32(len(images))) * 100)
+					p.Send(loadingMsg{
+						p: pe,
+					})
 				}
-			}(size)
-		}
+
+				m.Frames = frames
+
+				p.Send(playMsg{
+					m: *m,
+				})
+			}()
+		}(size)
 	}(&m)
+
 
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
@@ -121,10 +102,9 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := message.(type) {
 	case tea.WindowSizeMsg:
 		m.WindowSizeChan <- msg
-		return m.reset(), func() tea.Msg {
-			return loadingMsg{
-				p: 0,
-			}
+		m.Size = &msg
+		return m, func() tea.Msg {
+			return frameMsg{}
 		}
 
 	case tea.KeyMsg:
@@ -138,22 +118,15 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return frameMsg{}
 		}
 
-	case loadingMsg:
-		m.LoadingPercentage = msg.p
-    m.Files = make([]string, 0)
-		return m, nil
-
-	case updateFramesMsg:
-		m.Frames = msg.frames
-		m.Files = msg.files
-		return m, nil
+  case loadingMsg:
+    return m.loading(msg.p), nil
 
 	case frameMsg:
-    if len(m.Files) == 0 {
-      return m, nil
-    }
+		if len(m.Frames) == 0 {
+			return m, nil
+		}
 
-		if m.CurrentFrameIndex < len(m.Files) {
+		if m.CurrentFrameIndex < len(m.Frames)-1 {
 			m.CurrentFrameIndex++
 			return m, tick()
 		} else {
@@ -174,19 +147,15 @@ func (m model) View() string {
 		res += "Loading your frames... "
 		res += fmt.Sprintf("%d", m.LoadingPercentage)
 		res += "%"
+		if m.Size != nil {
+			res += fmt.Sprintf(", Width: %d, Height: %d", m.Size.Width, m.Size.Height)
+		}
 		res = style.Render(res)
 	} else if len(m.Frames) == m.CurrentFrameIndex {
-		frameName := m.Files[m.CurrentFrameIndex-1]
-
-		frame := m.Frames[frameName]
-
+		frame := m.Frames[m.CurrentFrameIndex]
 		res += frame
 	} else {
-
-		frameName := m.Files[m.CurrentFrameIndex]
-
-		frame := m.Frames[frameName]
-
+		frame := m.Frames[m.CurrentFrameIndex]
 		if len(frame) == 0 {
 			res += "LOADING FRAMES"
 		} else {
@@ -250,3 +219,59 @@ func tick() tea.Cmd {
 // 		}
 // 	}
 // }()
+
+// go func(m *model) {
+// 		images, err := readGif(gifPath)
+// 		// FIX: handle error
+// 		if err != nil {
+// 			return
+// 		}
+//
+// 		for size := range windowSizeChan {
+// 			cancel()
+// 			ctx, cancel = context.WithCancel(context.Background())
+//
+// 			go func(size tea.WindowSizeMsg) {
+// 				select {
+// 				case <-ctx.Done():
+// 					return
+// 				default:
+// 					c1 := loadImages(images)
+// 					results := make(chan job)
+//
+// 					numWorkers := 10
+// 					var wg sync.WaitGroup
+//
+// 					wg.Add(numWorkers)
+//
+// 					for i := 0; i < numWorkers; i++ {
+// 						go worker(i, &wg, c1, results, size.Width, size.Height)
+// 					}
+//
+// 					go func() {
+// 						wg.Wait()
+// 						close(results)
+// 					}()
+//
+// 					go func() {
+// 						frames := make(map[string]string)
+//
+// 						for j := range results {
+// 							frames[j.InputPath] = j.Ascii
+// 							pe := int((float32(len(frames)) / float32(len(fileNames))) * 100)
+// 							p.Send(loadingMsg{
+// 								p: pe,
+// 							})
+// 						}
+//
+// 						m.Files = fileNames
+// 						m.Frames = frames
+//
+// 						p.Send(playMsg{
+// 							m: *m,
+// 						})
+// 					}()
+// 				}
+// 			}(size)
+// 		}
+// 	}(&m)

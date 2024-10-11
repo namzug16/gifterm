@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-  "image/gif"
+	"image/gif"
 	"image/png"
-	"io/fs"
 	"math"
 	"os"
 	"sync"
@@ -17,8 +16,8 @@ import (
 )
 
 type model struct {
-	Frames            map[string]string
-	Files             []string
+	Frames            map[int]string
+	Size              *tea.WindowSizeMsg
 	CurrentFrameIndex int
 	LoadingPercentage int
 	WindowSizeChan    chan tea.WindowSizeMsg
@@ -34,7 +33,7 @@ func newModel(
 ) model {
 	return model{
 		CurrentFrameIndex: 0,
-		Frames:            make(map[string]string),
+		Frames:            make(map[int]string),
 		WindowSizeChan:    windowSizeChan,
 	}
 }
@@ -42,13 +41,23 @@ func newModel(
 func (m model) reset() model {
 	return model{
 		CurrentFrameIndex: 0,
-		Frames:            make(map[string]string),
+		Frames:            make(map[int]string),
 		WindowSizeChan:    m.WindowSizeChan,
 	}
 }
 
+func (m model) loading(p int) model {
+	return model{
+		CurrentFrameIndex: 0,
+		Frames:            make(map[int]string),
+		WindowSizeChan:    m.WindowSizeChan,
+    Size:              m.Size,
+    LoadingPercentage: p,
+	}
+}
+
 type job struct {
-	InputPath string
+	Index int
 	Image     image.Image
 	Ascii     string
 }
@@ -56,11 +65,26 @@ type job struct {
 // WARNING: CHANNELS =========================================================
 func loadImages(paths []string) <-chan job {
 	out := make(chan job)
+	// go func() {
+	// 	for _, p := range paths {
+	// 		job := job{
+	// 			// InputPath: p,
+	// 			// Image:     readImage(p),
+	// 		}
+	// 		out <- job
+	// 	}
+	// 	close(out)
+	// }()
+	return out
+}
+
+func chanFromImages(imgs []*image.Paletted) <-chan job {
+	out := make(chan job)
 	go func() {
-		for _, p := range paths {
+		for i, img := range imgs {
 			job := job{
-				InputPath: p,
-				Image:     readImage(p),
+				Index: i,
+				Image:     img,
 			}
 			out <- job
 		}
@@ -94,17 +118,6 @@ func imagesToAscii(input <-chan job) <-chan job {
 }
 
 // WARNING: =========================================================
-func readFiles(dir string) ([]fs.DirEntry, error) {
-	files, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, fmt.Errorf("cannot read input directory. %w", err)
-	}
-	if len(files) == 0 {
-		return nil, fmt.Errorf("empty fucking directory")
-	}
-	return files, nil
-}
-
 func readGif(path string) ([]*image.Paletted, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -119,7 +132,7 @@ func readGif(path string) ([]*image.Paletted, error) {
 		return nil, err
 	}
 
-  return gifImage.Image, nil
+	return gifImage.Image, nil
 }
 
 func worker(
@@ -160,6 +173,17 @@ func resizeImage(img image.Image, w, h int) image.Image {
 	return dst
 }
 
+// func resizeImages(imgs []*image.Paletted, w, h int) []image.Image {
+// 	res := make([]image.Image, len(imgs))
+// 	for i := 0; i < len(imgs); i++ {
+// 		img := imgs[i]
+// 		dst := image.NewRGBA(image.Rect(0, 0, w, h))
+// 		draw.NearestNeighbor.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Over, nil)
+// 		res[i] = dst
+// 	}
+// 	return res
+// }
+
 var style = lipgloss.NewStyle()
 
 func imageToAscii(img image.Image) string {
@@ -189,7 +213,7 @@ func imageToAscii(img image.Image) string {
 					b := uint8(bb)
 					hex := rgbToHex(r, g, b)
 					c := characterFromRgb(r, g, b)
-          //NOTE: this is where color gets set
+					// NOTE: this is where color gets set
 					if hex == "#000000" {
 						s := style.
 							Foreground(lipgloss.Color("#FFFFFF"))
@@ -270,4 +294,13 @@ func mapValue(
 	}
 
 	return maxOut - uint8(c)
+}
+
+func imgsToAscii(imgs []image.Image) []string {
+	res := make([]string, len(imgs))
+	for i := 0; i < len(imgs); i++ {
+		s := imageToAscii(imgs[i])
+		res[i] = s
+	}
+	return res
 }
