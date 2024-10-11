@@ -1,56 +1,68 @@
 package main
 
 import (
+	"image"
+	"image/png"
+	"os"
 	"testing"
-	"time"
+
+	"golang.org/x/image/draw"
 )
 
 func TestProcessGif(t *testing.T) {
-	start := time.Now()
-
 	gifPath := "output.gif"
 
 	imgs, err := readGif(gifPath)
+	if err != nil {
+		t.Log("===== err")
+		t.Log(err)
+		return
+	}
 
-  if (err != nil) {
-    t.Log("Shit is not wokring")
-    t.Log(err)
-    return
-  }
+	img := imgs[0]
 
-	stop := time.Since(start)
-	start = time.Now()
-	t.Log("Load gif in: ", stop)
+	srcBounds := img.Bounds()
+	srcW, srcH := srcBounds.Dx(), srcBounds.Dy()
+	t.Log("Bound of image", srcBounds)
+	t.Log("Bound of image", srcW, srcH)
 
-	resizedImgs := resizeGifImgs(imgs, 100, 50)
-	stop = time.Since(start)
-	start = time.Now()
-	t.Log("Resized imgs in: ", stop)
+	w := 178
 
-	imgsToAscii(resizedImgs)
+	h := 48
 
-	stop = time.Since(start)
-	t.Log("Ascii in: ", stop)
+	dst := image.Rect(0, 0, w, h)
 
-}
+	t.Log("Bound of view", dst)
+	t.Log("Bound of view", w, h)
 
-func IndexCharacter(t *testing.T) {
-	r := uint8(200)
-	g := uint8(120)
-	b := uint8(200)
+	newW, newH := getNewImageBounds(srcW, srcH, w, h)
 
-	c := characterFromRgb(r, g, b)
+	offsetX := (w - newW) / 2
+	offsetY := (h - newH) / 2
 
-	t.Log("CHARACTER : ", c)
-}
+	dstRect := image.Rect(offsetX, offsetY, offsetX+newW, offsetY+newH)
 
-func ProcessingSingleImageAscii(t *testing.T) {
-	img := readImage("input/frame_0001.png")
-	start := time.Now()
-	imageToAscii(img)
-	stop := time.Since(start)
-	t.Log("Image ascii: ", stop)
-}
+	t.Log("New Bounds of image inside view", dstRect)
+	t.Log("New Bounds of image inside view", newW, newH)
 
-func TestProcessMultipleImages(t *testing.T) {
+	dstImage := image.NewRGBA(dst)
+
+	draw.NearestNeighbor.Scale(dstImage, dstRect, img, img.Bounds(), draw.Over, nil)
+
+	t.Log("Image bounds", dstImage.Bounds(), dstImage.Bounds().Max)
+
+	outputFile, err := os.Create("output.png")
+	if err != nil {
+		t.Log("Failed to create output file:", err)
+		return
+	}
+	defer outputFile.Close()
+
+	err = png.Encode(outputFile, dstImage)
+	if err != nil {
+		t.Log("Failed to save image:", err)
+		return
+	}
+
+	t.Log("Image saved as output.png successfully")
 }

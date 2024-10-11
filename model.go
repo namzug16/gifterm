@@ -5,8 +5,8 @@ import (
 	"image"
 	"image/color"
 	"image/gif"
-	"image/png"
 	"math"
+	"math/rand"
 	"os"
 	"sync"
 
@@ -51,46 +51,38 @@ func (m model) loading(p int) model {
 		CurrentFrameIndex: 0,
 		Frames:            make(map[int]string),
 		WindowSizeChan:    m.WindowSizeChan,
-    Size:              m.Size,
-    LoadingPercentage: p,
+		Size:              m.Size,
+		LoadingPercentage: p,
 	}
 }
 
 type job struct {
 	Index int
-	Image     image.Image
-	Ascii     string
+	Image image.Image
+	Ascii string
 }
 
 // WARNING: CHANNELS =========================================================
-func loadImages(paths []string) <-chan job {
-	out := make(chan job)
-	// go func() {
-	// 	for _, p := range paths {
-	// 		job := job{
-	// 			// InputPath: p,
-	// 			// Image:     readImage(p),
-	// 		}
-	// 		out <- job
-	// 	}
-	// 	close(out)
-	// }()
-	return out
-}
-
 func chanFromImages(imgs []*image.Paletted) <-chan job {
 	out := make(chan job)
 	go func() {
 		for i, img := range imgs {
 			job := job{
 				Index: i,
-				Image:     img,
+				// FIX: am i loosing color data?
+				Image: img,
 			}
 			out <- job
 		}
 		close(out)
 	}()
 	return out
+}
+
+func palettedToRGBA(paletted *image.Paletted) *image.RGBA {
+	rgba := image.NewRGBA(paletted.Rect)
+	draw.Draw(rgba, paletted.Rect, paletted, image.Point{}, draw.Src)
+	return rgba
 }
 
 func resizeImages(input <-chan job, w, h int) <-chan job {
@@ -136,7 +128,6 @@ func readGif(path string) ([]*image.Paletted, error) {
 }
 
 func worker(
-	i int,
 	wg *sync.WaitGroup,
 	jobs <-chan job,
 	result chan<- job,
@@ -151,38 +142,48 @@ func worker(
 	}
 }
 
-func readImage(path string) image.Image {
-	file, err := os.Open(path)
-	if err != nil {
-		fmt.Println("CANT READ SHIT")
-		fmt.Println(err)
-	}
-	defer file.Close()
-	img, err := png.Decode(file)
-	if err != nil {
-		fmt.Println("CANT decode SHIT")
-		fmt.Println(path)
-		fmt.Println(err)
-	}
-	return img
-}
-
-func resizeImage(img image.Image, w, h int) image.Image {
+func resizeImage1(img image.Image, w, h int) image.Image {
 	dst := image.NewRGBA(image.Rect(0, 0, w, h))
 	draw.NearestNeighbor.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Over, nil)
 	return dst
 }
 
-// func resizeImages(imgs []*image.Paletted, w, h int) []image.Image {
-// 	res := make([]image.Image, len(imgs))
-// 	for i := 0; i < len(imgs); i++ {
-// 		img := imgs[i]
-// 		dst := image.NewRGBA(image.Rect(0, 0, w, h))
-// 		draw.NearestNeighbor.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Over, nil)
-// 		res[i] = dst
-// 	}
-// 	return res
-// }
+func resizeImage(img image.Image, w, h int) image.Image {
+	srcBounds := img.Bounds()
+	srcW, srcH := srcBounds.Dx(), srcBounds.Dy()
+
+	newW, newH := getNewImageBounds(srcW, srcH, w, h)
+
+	dst := image.NewRGBA(image.Rect(0, 0, w, h))
+
+	offsetX := (w - newW) / 2
+	offsetY := (h - newH) / 2
+
+	dstRect := image.Rect(offsetX, offsetY, offsetX+newW, offsetY+newH)
+
+	// draw.NearestNeighbor.Scale(dst, dstRect, img, img.Bounds(), draw.Over, nil)
+	draw.CatmullRom.Scale(dst, dstRect, img, img.Bounds(), draw.Over, nil)
+
+	return dst
+}
+
+func getNewImageBounds(srcW, srcH, w, h int) (int, int) {
+	var newW, newH int
+
+	rw := float64(srcW) / float64(w)
+	rh := float64(srcH) / float64(h)
+
+	// FIX: weird bug, makes the image to be drawn with half the width... that's why I added the *2
+	if rw > rh {
+		newH = int(float64(w)*float64(srcH)/float64(srcW)) * 2
+		newW = w
+	} else {
+		newW = int(float64(h)*float64(srcW)/float64(srcH)) * 2
+		newH = h
+	}
+
+	return newW, newH
+}
 
 var style = lipgloss.NewStyle()
 
@@ -217,7 +218,8 @@ func imageToAscii(img image.Image) string {
 					if hex == "#000000" {
 						s := style.
 							Foreground(lipgloss.Color("#FFFFFF"))
-						res += s.Render(string(cDensity[0]))
+							// FIX: get random token
+						res += s.Render(getRandomToken(cDensity))
 						// res += string(cDensity[0])
 					} else {
 						complementaryHex := rgbToHex(255-r, 255-g, 255-b)
@@ -296,11 +298,8 @@ func mapValue(
 	return maxOut - uint8(c)
 }
 
-func imgsToAscii(imgs []image.Image) []string {
-	res := make([]string, len(imgs))
-	for i := 0; i < len(imgs); i++ {
-		s := imageToAscii(imgs[i])
-		res[i] = s
-	}
-	return res
+func getRandomToken(slice string) string {
+	// rand.Seed(time.Now().UnixNano())
+	randomIndex := rand.Intn(len(slice))
+	return string(slice[randomIndex])
 }
