@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+  "image/gif"
 	"image/png"
 	"io/fs"
 	"math"
@@ -104,6 +105,23 @@ func readFiles(dir string) ([]fs.DirEntry, error) {
 	return files, nil
 }
 
+func readGif(path string) ([]*image.Paletted, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		fmt.Println("Error opening GIF:", err)
+		return nil, err
+	}
+	defer file.Close()
+
+	gifImage, err := gif.DecodeAll(file)
+	if err != nil {
+		fmt.Println("Error decoding GIF:", err)
+		return nil, err
+	}
+
+  return gifImage.Image, nil
+}
+
 func worker(
 	i int,
 	wg *sync.WaitGroup,
@@ -171,16 +189,19 @@ func imageToAscii(img image.Image) string {
 					b := uint8(bb)
 					hex := rgbToHex(r, g, b)
 					c := characterFromRgb(r, g, b)
+          //NOTE: this is where color gets set
 					if hex == "#000000" {
 						s := style.
 							Foreground(lipgloss.Color("#FFFFFF"))
 						res += s.Render(string(cDensity[0]))
+						// res += string(cDensity[0])
 					} else {
 						complementaryHex := rgbToHex(255-r, 255-g, 255-b)
 						s := style.
 							Background(lipgloss.Color(hex)).
 							Foreground(lipgloss.Color(complementaryHex))
 						res += s.Render(c)
+						// res += c
 					}
 				}
 				res = res + "\n"

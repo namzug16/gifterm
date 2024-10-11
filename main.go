@@ -140,6 +140,7 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 
 	case loadingMsg:
 		m.LoadingPercentage = msg.p
+    m.Files = make([]string, 0)
 		return m, nil
 
 	case updateFramesMsg:
@@ -148,6 +149,10 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case frameMsg:
+    if len(m.Files) == 0 {
+      return m, nil
+    }
+
 		if m.CurrentFrameIndex < len(m.Files) {
 			m.CurrentFrameIndex++
 			return m, tick()
