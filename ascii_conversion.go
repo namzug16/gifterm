@@ -10,9 +10,17 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+type AsciiConfig struct {
+	CharacterDensity string
+	SetRandomBlank   bool
+}
+
 var style = lipgloss.NewStyle()
 
-func imageToAscii(img image.Image) string {
+func imageToAscii(
+	img image.Image,
+	config AsciiConfig,
+) string {
 	if img == nil {
 		return ""
 	}
@@ -38,13 +46,15 @@ func imageToAscii(img image.Image) string {
 					g := uint8(gg)
 					b := uint8(bb)
 					hex := rgbToHex(r, g, b)
-					c := characterFromRgb(r, g, b)
-					// NOTE: this is where color gets set
+					c := characterFromRgb(r, g, b, config.CharacterDensity)
 					if hex == "#000000" {
 						s := style.
 							Foreground(lipgloss.Color("#FFFFFF"))
-							// FIX: get random token
-						res += s.Render(getRandomToken(cDensity))
+						if config.SetRandomBlank {
+							res += s.Render(getRandomToken(config.CharacterDensity))
+						} else {
+							res += s.Render(string(config.CharacterDensity[0]))
+						}
 					} else {
 						complementaryHex := rgbToHex(255-r, 255-g, 255-b)
 						s := style.
@@ -78,16 +88,13 @@ func rgbToHex(r, g, b uint8) string {
 	return fmt.Sprintf("#%02x%02x%02x", r, g, b)
 }
 
-const cDensity = ".,:-=i|%O#@$X"
-// const cDensity = "    "
-
-func characterFromRgb(r, g, b uint8) string {
+func characterFromRgb(r, g, b uint8, cd string) string {
 	avgF := float64(int(r)+int(g)+int(b)) / 3.0
 	avg := uint8(math.Round(avgF))
-	len := len(cDensity)
+	len := len(cd)
 	i := int(mapValue(avg, 0, 255, 0, uint8(len)))
 	if i >= len {
 		i = len - 1
 	}
-	return string(cDensity[int(i)])
+	return string(cd[int(i)])
 }

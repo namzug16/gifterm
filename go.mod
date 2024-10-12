@@ -1,4 +1,4 @@
-module github.com/namzug16/cliay
+module github.com/namzug16/gifterm
 
 go 1.22.0
 
@@ -6,7 +6,6 @@ require (
 	github.com/charmbracelet/bubbletea v0.26.4
 	github.com/charmbracelet/lipgloss v0.13.0
 	golang.org/x/image v0.17.0
-	golang.org/x/term v0.25.0
 )
 
 require (

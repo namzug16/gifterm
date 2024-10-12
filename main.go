@@ -13,6 +13,8 @@ import (
 func main() {
 	fps := flag.Int("fps", 12, "Specify the name to greet")
 	far := flag.Float64("far", 2.1, "Font aspect ratio")
+	characterDensity := flag.String("cd", ".,:-=i|%O#@$X", "Set character density string")
+	randomBlank := flag.Bool("randomBlank", false, "Set if a random character from the character density string should be pick for blank pixels")
 
 	flag.Parse()
 
@@ -20,7 +22,7 @@ func main() {
 
 	if len(args) < 1 {
 		fmt.Println("Gif file has not been specified.")
-		fmt.Println("Usage: cliay <input.gif>")
+		fmt.Println("Usage: gifterm <input.gif>")
 		return
 	}
 
@@ -35,6 +37,10 @@ func main() {
 		windowSizeChan,
 		*fps,
 		*far,
+		AsciiConfig{
+			CharacterDensity: *characterDensity,
+			SetRandomBlank:   *randomBlank,
+		},
 	)
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
@@ -46,9 +52,8 @@ func main() {
 			return
 		}
 
-		// size := <-windowSizeChan
 		for size := range windowSizeChan {
-      m.reset()
+			m.reset()
 			cancel()
 			ctx, cancel = context.WithCancel(context.Background())
 			go func(size tea.WindowSizeMsg) {
@@ -61,7 +66,16 @@ func main() {
 				wg.Add(numWorkers)
 
 				for i := 0; i < numWorkers; i++ {
-					go worker(ctx, &wg, c1, results, size.Width, size.Height)
+					go worker(
+						ctx,
+						&wg,
+						c1,
+						results,
+						size.Width,
+						size.Height,
+						m.FAR,
+						m.AsciiConfiguration,
+					)
 				}
 
 				go func() {

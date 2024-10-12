@@ -52,10 +52,12 @@ func worker(
 	result chan<- job,
 	w,
 	h int,
+	far float64,
+  aConfig AsciiConfig,
 ) {
 	defer wg.Done()
-	c2 := resizeImages(ctx, jobs, w, h)
-	c3 := imagesToAscii(ctx, c2)
+	c2 := resizeImages(ctx, jobs, w, h, far)
+	c3 := imagesToAscii(ctx, c2, aConfig)
 	for {
 		select {
 		case <-ctx.Done():
@@ -74,6 +76,7 @@ func resizeImages(
 	input <-chan job,
 	w,
 	h int,
+	far float64,
 ) <-chan job {
 	out := make(chan job)
 	go func() {
@@ -87,7 +90,7 @@ func resizeImages(
 					return
 				}
 
-				job.Image = resizeImage(job.Image, w, h)
+				job.Image = resizeImage(job.Image, w, h, far)
 				out <- job
 			}
 		}
@@ -98,6 +101,7 @@ func resizeImages(
 func imagesToAscii(
 	ctx context.Context,
 	input <-chan job,
+  aConfig AsciiConfig,
 ) <-chan job {
 	out := make(chan job)
 
@@ -112,7 +116,7 @@ func imagesToAscii(
 					return
 				}
 
-				job.Ascii = imageToAscii(job.Image)
+				job.Ascii = imageToAscii(job.Image, aConfig)
 				out <- job
 			}
 		}

@@ -1,22 +1,19 @@
-###HOW TO DOWNLOAD A VIDEO
+# GifTerm
+GIFs on the terminal
 
-youtube-dl -f worstvideo
+# Build
 
-ffmpeg -i input_video.mp4 -vf "fps=24" frame_%04d.png
+You can build and install the tool with the Makefile
 
-ffmpeg -i water.mp4 -vf "fps=24" input2/frame_%04d.png
+```$ make```
 
-ffmpeg -i br.mp4 -vf "fps=24" input/frame_%04d.png
+# Usage
 
-
-
-
-
+```$ gifterm input.gif```
 
 
+# How to convert a video into a GIF
 
+Make sure to have installed ffmpeg and imagemagick and ten run
 
-
-# This converts a video to a GIF
-
-ffmpeg -i test.mp4 -vf "fps=12" -c:v pam -f image2pipe - | convert - output.gif
+```$ ffmpeg -i <input.mp4> -vf "fps=12" -c:v pam -f image2pipe - | convert - output.gif```

@@ -16,12 +16,14 @@ type model struct {
 	LoadingPercentage int
 	FPS               int
 	FAR               float64
+  AsciiConfiguration AsciiConfig
 }
 
 func newModel(
 	windowSizeChan chan tea.WindowSizeMsg,
 	fps int,
 	far float64,
+  asciiConfig AsciiConfig,
 ) model {
 	return model{
 		CurrentFrameIndex: 0,
@@ -29,6 +31,7 @@ func newModel(
 		WindowSizeChan:    windowSizeChan,
 		FPS:               fps,
 		FAR:               far,
+    AsciiConfiguration: asciiConfig,
 	}
 }
 
