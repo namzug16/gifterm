@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"image"
 	"image/png"
 	"os"
@@ -9,7 +10,7 @@ import (
 	"golang.org/x/image/draw"
 )
 
-func TestProcessGif(t *testing.T) {
+func ProcessGif(t *testing.T) {
 	gifPath := "output.gif"
 
 	imgs, err := readGif(gifPath)
@@ -19,50 +20,100 @@ func TestProcessGif(t *testing.T) {
 		return
 	}
 
-	img := imgs[0]
+	for i := 0; i < len(imgs); i++ {
+		img := imgs[i]
+		srcBounds := img.Bounds()
+		srcW, srcH := srcBounds.Dx(), srcBounds.Dy()
+		t.Log("Bound of image", srcBounds)
+		t.Log("Bound of image", srcW, srcH)
 
-	srcBounds := img.Bounds()
-	srcW, srcH := srcBounds.Dx(), srcBounds.Dy()
-	t.Log("Bound of image", srcBounds)
-	t.Log("Bound of image", srcW, srcH)
+		fileName := fmt.Sprintf("output_original_%d.png", i)
 
-	w := 178
+		// NOTE: STORE GIF IMAGE
+		outputFile, err := os.Create(fileName)
+		if err != nil {
+			t.Log("Failed to create output file:", err)
+			return
+		}
+		defer outputFile.Close()
 
-	h := 48
+		err = png.Encode(outputFile, img)
+		if err != nil {
+			t.Log("Failed to save image:", err)
+			return
+		}
 
-	dst := image.Rect(0, 0, w, h)
+		t.Log("Image saved successfully", fileName)
+		// NOTE:
 
-	t.Log("Bound of view", dst)
-	t.Log("Bound of view", w, h)
+		w := 178
 
-	newW, newH := getNewImageBounds(srcW, srcH, w, h)
+		h := 48
 
-	offsetX := (w - newW) / 2
-	offsetY := (h - newH) / 2
+		dst := image.Rect(0, 0, w, h)
 
-	dstRect := image.Rect(offsetX, offsetY, offsetX+newW, offsetY+newH)
+		t.Log("Bound of view", dst)
+		t.Log("Bound of view", w, h)
 
-	t.Log("New Bounds of image inside view", dstRect)
-	t.Log("New Bounds of image inside view", newW, newH)
+		newW, newH := getNewImageBounds(srcW, srcH, w, h)
 
-	dstImage := image.NewRGBA(dst)
+		offsetX := (w - newW) / 2
+		offsetY := (h - newH) / 2
 
-	draw.NearestNeighbor.Scale(dstImage, dstRect, img, img.Bounds(), draw.Over, nil)
+		dstRect := image.Rect(offsetX, offsetY, offsetX+newW, offsetY+newH)
 
-	t.Log("Image bounds", dstImage.Bounds(), dstImage.Bounds().Max)
+		t.Log("New Bounds of image inside view", dstRect)
+		t.Log("New Bounds of image inside view", newW, newH)
 
-	outputFile, err := os.Create("output.png")
-	if err != nil {
-		t.Log("Failed to create output file:", err)
-		return
+		dstImage := image.NewRGBA(dst)
+
+		draw.NearestNeighbor.Scale(dstImage, dstRect, img, img.Bounds(), draw.Over, nil)
+
+		t.Log("Image bounds", dstImage.Bounds(), dstImage.Bounds().Max)
+
+		fileName = fmt.Sprintf("output_%d.png", i)
+
+		outputFile, err = os.Create(fileName)
+		if err != nil {
+			t.Log("Failed to create output file:", err)
+			return
+		}
+		defer outputFile.Close()
+
+		err = png.Encode(outputFile, dstImage)
+		if err != nil {
+			t.Log("Failed to save image:", err)
+			return
+		}
+
+		t.Log("Image saved successfully", fileName)
 	}
-	defer outputFile.Close()
+}
 
-	err = png.Encode(outputFile, dstImage)
-	if err != nil {
-		t.Log("Failed to save image:", err)
-		return
-	}
+func ConvertPalettedToRGBA(img *image.Paletted) *image.RGBA {
+	bounds := img.Bounds()
+	rgbaImg := image.NewRGBA(bounds)
+	draw.Draw(rgbaImg, bounds, img, bounds.Min, draw.Src)
+	return rgbaImg
+}
 
-	t.Log("Image saved as output.png successfully")
+func TestImageToASCII(t *testing.T) {
+  	path := "output_7.png"
+    file, err := os.Open(path) 
+    if err != nil {
+        t.Log("Error opening the image:", err)
+        return
+    }
+    defer file.Close()
+
+    img, _, err := image.Decode(file)
+    if err != nil {
+        t.Log("Error decoding the image:", err)
+        return
+    }
+
+  ascii := imageToAscii(img)
+
+			t.Log(ascii)
+
 }
