@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	fps := flag.Int("fps", 12, "Specify the name to greet")
+	fps := flag.Int("fps", 12, "FPS")
 	far := flag.Float64("far", 2.1, "Font aspect ratio")
 	characterDensity := flag.String("cd", ".,:-=i|%O#@$X", "Set character density string")
 	randomBlank := flag.Bool("randomBlank", false, "Set if a random character from the character density string should be pick for blank pixels")
