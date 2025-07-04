@@ -9,29 +9,29 @@ import (
 )
 
 type model struct {
-	Frames            map[int]string
-	Size              *tea.WindowSizeMsg
-	WindowSizeChan    chan tea.WindowSizeMsg
-	CurrentFrameIndex int
-	LoadingPercentage int
-	FPS               int
-	FAR               float64
-  AsciiConfiguration AsciiConfig
+	Frames             map[int]string
+	Size               *tea.WindowSizeMsg
+	WindowSizeChan     chan tea.WindowSizeMsg
+	CurrentFrameIndex  int
+	LoadingPercentage  int
+	FPS                int
+	FAR                float64
+	AsciiConfiguration AsciiConfig
 }
 
 func newModel(
 	windowSizeChan chan tea.WindowSizeMsg,
 	fps int,
 	far float64,
-  asciiConfig AsciiConfig,
+	asciiConfig AsciiConfig,
 ) model {
 	return model{
-		CurrentFrameIndex: 0,
-		Frames:            make(map[int]string),
-		WindowSizeChan:    windowSizeChan,
-		FPS:               fps,
-		FAR:               far,
-    AsciiConfiguration: asciiConfig,
+		CurrentFrameIndex:  0,
+		Frames:             make(map[int]string),
+		WindowSizeChan:     windowSizeChan,
+		FPS:                fps,
+		FAR:                far,
+		AsciiConfiguration: asciiConfig,
 	}
 }
 
@@ -68,8 +68,8 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.Size = &msg
 		return m, func() tea.Msg {
 			return loadingMsg{
-        p: 0,
-      }
+				p: 0,
+			}
 		}
 
 	case tea.KeyMsg:

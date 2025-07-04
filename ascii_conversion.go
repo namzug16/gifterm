@@ -32,6 +32,13 @@ func imageToAscii(
 	chunkSize := h / numWorkers
 	results := make([]string, numWorkers)
 
+	normalisedEndOfChunk := func(i int) int {
+		if i == numWorkers-1 {
+			return h
+		}
+		return (i + 1) * chunkSize
+	}
+
 	for w := range numWorkers {
 		wg.Add(1)
 		go func(workerID, start, end int) {
@@ -65,7 +72,7 @@ func imageToAscii(
 				res = res + "\n"
 			}
 			results[workerID] = res
-		}(w, w*chunkSize, (w+1)*chunkSize)
+		}(w, w*chunkSize, normalisedEndOfChunk(w))
 	}
 
 	wg.Wait()
@@ -74,6 +81,8 @@ func imageToAscii(
 	for _, result := range results {
 		finalResult += result
 	}
+
+	finalResult = finalResult[:len(finalResult)-2]
 
 	return finalResult
 }
