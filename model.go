@@ -15,7 +15,7 @@ type model struct {
 	CurrentFrameIndex   int
 	LoadingPercentage   int
 	FPS                 int
-	FAR                 float64
+	CAR                 float64
 	AsciiConfiguration  AsciiConfig
 	ProcessingCompleted bool
 	Playing             bool
@@ -24,7 +24,7 @@ type model struct {
 func newModel(
 	windowSizeChan chan tea.WindowSizeMsg,
 	fps int,
-	far float64,
+	car float64,
 	asciiConfig AsciiConfig,
 ) model {
 	return model{
@@ -32,7 +32,7 @@ func newModel(
 		Frames:              make(map[int]string),
 		WindowSizeChan:      windowSizeChan,
 		FPS:                 fps,
-		FAR:                 far,
+		CAR:                 car,
 		AsciiConfiguration:  asciiConfig,
 		ProcessingCompleted: false,
 		Playing:             false,
@@ -167,6 +167,7 @@ func (m model) View() string {
 		res += "Character Density: " + m.AsciiConfiguration.CharacterDensity + "\n"
 		res += "Random Blank: " + fmt.Sprint(m.AsciiConfiguration.SetRandomBlank) + "\n"
 		res += "FPS: " + fmt.Sprint(m.FPS) + "\n"
+		res += "Cell Aspect Ratio" + fmt.Sprint(m.CAR) + "\n"
 		if m.ProcessingCompleted {
 			res += "Press <space> in order to start playing the gif"
 		}

@@ -5,16 +5,18 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"golang.org/x/sys/unix"
 )
 
 func main() {
 	fps := flag.Int("fps", 12, "FPS")
-	far := flag.Float64("far", 2.1, "Font aspect ratio")
 	characterDensity := flag.String("cd", ".,:-=i|%O#@$X", "Set character density string")
 	randomBlank := flag.Bool("randomBlank", false, "Set if a random character from the character density string should be pick for blank pixels")
+	ofg := flag.Bool("ofg", false, "Only Foreground - Set if only the foregroud color should be set")
 
 	flag.Parse()
 
@@ -23,23 +25,37 @@ func main() {
 	if len(args) < 1 {
 		fmt.Println("Gif file has not been specified.")
 		fmt.Println("Usage: gifterm <input.gif>")
-		return
+		os.Exit(1)
 	}
+
+	//TODO: verify file exists
 
 	path := args[0]
 
-	// TODO: verify file is a gif
+	ws, err := unix.IoctlGetWinsize(int(os.Stdout.Fd()), unix.TIOCGWINSZ)
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "TIOCGWINSZ failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	cw := float64(ws.Xpixel) / float64(ws.Col)
+	ch := float64(ws.Ypixel) / float64(ws.Row)
+
+	car := ch / cw;
 
 	windowSizeChan := make(chan tea.WindowSizeMsg)
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	m := newModel(
 		windowSizeChan,
 		*fps,
-		*far,
+		car,
 		AsciiConfig{
 			CharacterDensity: *characterDensity,
 			SetRandomBlank:   *randomBlank,
+			OnlyForeground:   *ofg,
 		},
 	)
 
@@ -73,7 +89,7 @@ func main() {
 						results,
 						size.Width,
 						size.Height,
-						m.FAR,
+						m.CAR,
 						m.AsciiConfiguration,
 					)
 				}

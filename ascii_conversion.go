@@ -12,6 +12,7 @@ import (
 type AsciiConfig struct {
 	CharacterDensity string
 	SetRandomBlank   bool
+	OnlyForeground   bool
 }
 
 var style = lipgloss.NewStyle()
@@ -62,10 +63,17 @@ func imageToAscii(
 							res += s.Render(string(config.CharacterDensity[0]))
 						}
 					} else {
-						complementaryHex := rgbToHex(255-r, 255-g, 255-b)
-						s := style.
-							Background(lipgloss.Color(hex)).
-							Foreground(lipgloss.Color(complementaryHex))
+						var s lipgloss.Style
+
+						if config.OnlyForeground {
+							s = style.
+								Foreground(lipgloss.Color(hex))
+						} else {
+							complementaryHex := rgbToHex(255-r, 255-g, 255-b)
+							s = style.
+								Background(lipgloss.Color(hex)).
+								Foreground(lipgloss.Color(complementaryHex))
+						}
 						res += s.Render(c)
 					}
 				}

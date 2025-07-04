@@ -33,14 +33,14 @@ $ gifterm <input.gif>
 ### Flags
 
 - **cd**: Character Density. Default ".,:-=i|%O#@$X"
-- **far**: Font Aspect Ratio. Default 2.1
 - **fps**: FPS. Default 12
 - **randomBlank**: Set if a random character from CD should be picked for a blank pixel
+- **ofg**: Only Foreground. Set if only the foregroud color should be set
 
 > The Font Aspect Ratio changes from terminal to terminal, this value works in mine, so make sure to play a round to find yours
 
 ```
-$ gifterm -cd ".,:-=i|%O#@$X" -far 2.1 -fps 12 -randomBlank <input.gif> 
+$ gifterm -cd ".,:-=i|%O#@$X" -fps 12 -randomBlank <input.gif> 
 ```
 Will produce something like this
 

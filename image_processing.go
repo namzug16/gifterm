@@ -6,11 +6,11 @@ import (
 	"golang.org/x/image/draw"
 )
 
-func resizeImage(img image.Image, w, h int, far float64) image.Image {
+func resizeImage(img image.Image, w, h int, car float64) image.Image {
 	srcBounds := img.Bounds()
 	srcW, srcH := srcBounds.Dx(), srcBounds.Dy()
 
-	newW, newH := getNewImageBounds(srcW, srcH, w, h, far)
+	newW, newH := getNewImageBounds(srcW, srcH, w, h, car)
 
 	dst := image.NewRGBA(image.Rect(0, 0, w, h))
 
@@ -24,18 +24,17 @@ func resizeImage(img image.Image, w, h int, far float64) image.Image {
 	return dst
 }
 
-func getNewImageBounds(srcW, srcH, w, h int, far float64) (int, int) {
+func getNewImageBounds(srcW, srcH, w, h int, car float64) (int, int) {
 	var newW, newH int
 
 	rw := float64(srcW) / float64(w)
 	rh := float64(srcH) / float64(h)
 
-	// NOTE: far represents the font aspect ratio, this value cannot be read from the terminal so it requires manual settings :/
 	if rw > rh {
-		newH = int(float64(w) * float64(srcH) / float64(srcW) * far)
+		newH = int(float64(w) * float64(srcH) / float64(srcW) * car)
 		newW = w
 	} else {
-		newW = int(float64(h) * float64(srcW) / float64(srcH) * far)
+		newW = int(float64(h) * float64(srcW) / float64(srcH) * car)
 		newH = h
 	}
 
