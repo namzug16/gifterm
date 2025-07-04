@@ -65,7 +65,7 @@ func main() {
 
 				wg.Add(numWorkers)
 
-				for i := 0; i < numWorkers; i++ {
+				for range numWorkers {
 					go worker(
 						ctx,
 						&wg,

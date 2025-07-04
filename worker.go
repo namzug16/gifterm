@@ -24,7 +24,7 @@ func chanFromImages(imgs []*image.Paletted) <-chan job {
 		savedPreviousImg := image.NewRGBA(bounds)
 		draw.Draw(savedPreviousImg, bounds, image.NewUniform(color.Transparent), image.Point{}, draw.Src)
 
-		for i := 0; i < len(imgs); i++ {
+		for i := range imgs {
 			cumulativeImage := image.NewRGBA(bounds)
 			draw.Draw(cumulativeImage, bounds, savedPreviousImg, image.Point{}, draw.Src)
 			frame := imgs[i]
@@ -53,7 +53,7 @@ func worker(
 	w,
 	h int,
 	far float64,
-  aConfig AsciiConfig,
+	aConfig AsciiConfig,
 ) {
 	defer wg.Done()
 	c2 := resizeImages(ctx, jobs, w, h, far)
@@ -101,7 +101,7 @@ func resizeImages(
 func imagesToAscii(
 	ctx context.Context,
 	input <-chan job,
-  aConfig AsciiConfig,
+	aConfig AsciiConfig,
 ) <-chan job {
 	out := make(chan job)
 

@@ -30,7 +30,7 @@ func getNewImageBounds(srcW, srcH, w, h int, far float64) (int, int) {
 	rw := float64(srcW) / float64(w)
 	rh := float64(srcH) / float64(h)
 
-  // NOTE: far represents the font aspect ratio, this value cannot be read from the terminal so it requires manual settings :/ 
+	// NOTE: far represents the font aspect ratio, this value cannot be read from the terminal so it requires manual settings :/
 	if rw > rh {
 		newH = int(float64(w) * float64(srcH) / float64(srcW) * far)
 		newW = w

@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"image"
-	"image/color"
 	"math"
 	"sync"
 
@@ -33,13 +32,13 @@ func imageToAscii(
 	chunkSize := h / numWorkers
 	results := make([]string, numWorkers)
 
-	for w := 0; w < numWorkers; w++ {
+	for w := range numWorkers {
 		wg.Add(1)
 		go func(workerID, start, end int) {
 			defer wg.Done()
 			res := ""
 			for i := start; i < end; i++ {
-				for j := 0; j < ww; j++ {
+				for j := range ww {
 					co := img.At(j, i)
 					rr, gg, bb, _ := co.RGBA()
 					r := uint8(rr)
@@ -77,11 +76,6 @@ func imageToAscii(
 	}
 
 	return finalResult
-}
-
-func colorToHex(c color.Color) string {
-	r, g, b, _ := c.RGBA()
-	return fmt.Sprintf("#%02x%02x%02x", r>>8, g>>8, b>>8)
 }
 
 func rgbToHex(r, g, b uint8) string {
