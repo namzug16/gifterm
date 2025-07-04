@@ -9,14 +9,16 @@ import (
 )
 
 type model struct {
-	Frames             map[int]string
-	Size               *tea.WindowSizeMsg
-	WindowSizeChan     chan tea.WindowSizeMsg
-	CurrentFrameIndex  int
-	LoadingPercentage  int
-	FPS                int
-	FAR                float64
-	AsciiConfiguration AsciiConfig
+	Frames              map[int]string
+	Size                *tea.WindowSizeMsg
+	WindowSizeChan      chan tea.WindowSizeMsg
+	CurrentFrameIndex   int
+	LoadingPercentage   int
+	FPS                 int
+	FAR                 float64
+	AsciiConfiguration  AsciiConfig
+	ProcessingCompleted bool
+	Playing             bool
 }
 
 func newModel(
@@ -26,12 +28,14 @@ func newModel(
 	asciiConfig AsciiConfig,
 ) model {
 	return model{
-		CurrentFrameIndex:  0,
-		Frames:             make(map[int]string),
-		WindowSizeChan:     windowSizeChan,
-		FPS:                fps,
-		FAR:                far,
-		AsciiConfiguration: asciiConfig,
+		CurrentFrameIndex:   0,
+		Frames:              make(map[int]string),
+		WindowSizeChan:      windowSizeChan,
+		FPS:                 fps,
+		FAR:                 far,
+		AsciiConfiguration:  asciiConfig,
+		ProcessingCompleted: false,
+		Playing:             false,
 	}
 }
 
@@ -47,13 +51,24 @@ func (m *model) loading(p int) {
 	m.LoadingPercentage = p
 }
 
+func (m *model) setProcessingAsCompleted(oldModel *model) {
+	m.ProcessingCompleted = true
+	m.Size = oldModel.Size
+}
+
+func (m *model) play() {
+	m.Playing = true
+}
+
 type loadingMsg struct {
 	p int
 }
 
-type playMsg struct {
+type processingCompletedMsg struct {
 	m model
 }
+
+type playMsg struct{}
 
 type frameMsg struct{}
 
@@ -73,13 +88,30 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "esc", "ctrl+c":
-			return m, tea.Quit
+		switch msg.Type {
+		case tea.KeySpace:
+			if m.ProcessingCompleted {
+				return m, func() tea.Msg {
+					return playMsg{}
+				}
+			}
+		case tea.KeyRunes:
+			switch msg.String() {
+			case "q", "esc", "ctrl+c":
+				return m, tea.Quit
+			}
 		}
 
+	case processingCompletedMsg:
+		msg.m.setProcessingAsCompleted(&m)
+		return msg.m, nil
+
 	case playMsg:
-		return msg.m, func() tea.Msg {
+		if m.Playing {
+			return m, nil
+		}
+		m.play()
+		return m, func() tea.Msg {
 			return frameMsg{}
 		}
 
@@ -120,13 +152,23 @@ func canShowFrame(m model) bool {
 func (m model) View() string {
 	res := ""
 
-	if len(m.Frames) == 0 {
+	if !m.Playing {
 		style := lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00"))
-		res += "Loading your frames... "
-		res += fmt.Sprintf("%d", m.LoadingPercentage)
-		res += "%"
+		if !m.ProcessingCompleted {
+			res += "Loading your frames... "
+			res += fmt.Sprintf("%d", m.LoadingPercentage)
+			res += "%\n"
+		} else {
+			res += "Frames Completed\n"
+		}
 		if m.Size != nil {
-			res += fmt.Sprintf(", Width: %d, Height: %d", m.Size.Width, m.Size.Height)
+			res += fmt.Sprintf("Width: %d, Height: %d\n", m.Size.Width, m.Size.Height)
+		}
+		res += "Character Density: " + m.AsciiConfiguration.CharacterDensity + "\n"
+		res += "Random Blank: " + fmt.Sprint(m.AsciiConfiguration.SetRandomBlank) + "\n"
+		res += "FPS: " + fmt.Sprint(m.FPS) + "\n"
+		if m.ProcessingCompleted {
+			res += "Press <space> in order to start playing the gif"
 		}
 		res = style.Render(res)
 	} else if len(m.Frames) == m.CurrentFrameIndex {
@@ -134,11 +176,7 @@ func (m model) View() string {
 		res += frame
 	} else {
 		frame := m.Frames[m.CurrentFrameIndex]
-		if len(frame) == 0 {
-			res += "LOADING FRAMES"
-		} else {
-			res += frame
-		}
+		res += frame
 	}
 
 	return res

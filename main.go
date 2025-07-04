@@ -101,7 +101,7 @@ func main() {
 
 					m.Frames = frames
 
-					p.Send(playMsg{
+					p.Send(processingCompletedMsg{
 						m: *m,
 					})
 				}()
