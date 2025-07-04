@@ -2,10 +2,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -28,9 +32,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	//TODO: verify file exists
-
 	path := args[0]
+
+	if !gifExists(path) {
+		fmt.Printf("GIF %q does not exist or it is not a GIF\n", path)
+		os.Exit(1)
+	}
 
 	ws, err := unix.IoctlGetWinsize(int(os.Stdout.Fd()), unix.TIOCGWINSZ)
 
@@ -42,7 +49,7 @@ func main() {
 	cw := float64(ws.Xpixel) / float64(ws.Col)
 	ch := float64(ws.Ypixel) / float64(ws.Row)
 
-	car := ch / cw;
+	car := ch / cw
 
 	windowSizeChan := make(chan tea.WindowSizeMsg)
 
@@ -128,4 +135,35 @@ func main() {
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func gifExists(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false
+		}
+		return false
+	}
+	if info.IsDir() {
+		return false
+	}
+
+	if strings.ToLower(filepath.Ext(path)) != ".gif" {
+		return false
+	}
+
+	//NOTE: header check and signature
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	buf := make([]byte, 6)
+	if _, err := io.ReadFull(f, buf); err != nil {
+		return false
+	}
+	sig := string(buf)
+	return sig == "GIF87a" || sig == "GIF89a"
 }
