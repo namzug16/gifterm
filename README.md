@@ -14,7 +14,17 @@ GIFs on the terminal
 
 ## Installation
 
-You can simply install it by running
+Clone the repository 
+
+```
+$ git clone https://github.com/namzug16/gifterm.git
+```
+
+```
+$ cd gifterm
+```
+
+And then you can simply install it by running
 
 ```
 $ make
@@ -35,18 +45,22 @@ $ gifterm <input.gif>
 - **cd**: Character Density. Default ".,:-=i|%O#@$X"
 - **fps**: FPS. Default 12
 - **randomBlank**: Set if a random character from CD should be picked for a blank pixel
-- **ofg**: Only Foreground. Set if only the foregroud color should be set
+- **ofg**: Only Foreground. Set if only the foreground color should be set
 
-> The Font Aspect Ratio changes from terminal to terminal, this value works in mine, so make sure to play a round to find yours
-
+#### Examples
 ```
 $ gifterm -cd ".,:-=i|%O#@$X" -fps 12 -randomBlank <input.gif> 
 ```
-Will produce something like this
-
 <img src="./assets/gifterm_random_blank.gif" alt="Gifterm demo" style="width: 100%;">
 
+```
+$ gifterm -fps 16 -ofg <input.gif> 
+```
+<img src="./assets/gifterm_ofg.gif" alt="Gifterm demo" style="width: 100%;">
+
 ## How to convert a video into a GIF
+
+> Keep in mind that long GIFs will take more time to process
 
 Make sure to have installed ffmpeg and imagemagick and then run
 
