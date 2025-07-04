@@ -49,6 +49,8 @@ func (m *model) loading(p int) {
 	m.CurrentFrameIndex = 0
 	m.Frames = make(map[int]string)
 	m.LoadingPercentage = p
+	m.ProcessingCompleted = false
+	m.Playing = false
 }
 
 func (m *model) setProcessingAsCompleted(oldModel *model) {
@@ -167,7 +169,7 @@ func (m model) View() string {
 		res += "Character Density: " + m.AsciiConfiguration.CharacterDensity + "\n"
 		res += "Random Blank: " + fmt.Sprint(m.AsciiConfiguration.SetRandomBlank) + "\n"
 		res += "FPS: " + fmt.Sprint(m.FPS) + "\n"
-		res += "Cell Aspect Ratio" + fmt.Sprint(m.CAR) + "\n"
+		res += "Cell Aspect Ratio: " + fmt.Sprint(m.CAR) + "\n"
 		if m.ProcessingCompleted {
 			res += "Press <space> in order to start playing the gif"
 		}
