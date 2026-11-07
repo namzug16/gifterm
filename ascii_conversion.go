@@ -5,7 +5,6 @@ import (
 	"image"
 	"math/rand/v2"
 	"strings"
-	"sync"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -18,81 +17,47 @@ type AsciiConfig struct {
 
 var style = lipgloss.NewStyle()
 
+var blankStyle = style.Foreground(lipgloss.Color("#FFFFFF"))
+
 func imageToAscii(
 	img image.Image,
 	config AsciiConfig,
 ) string {
-	if img == nil {
-		return ""
-	}
-
 	characters := []rune(config.CharacterDensity)
-	ww := img.Bounds().Max.X
-	h := img.Bounds().Max.Y
+	bounds := img.Bounds()
 
-	var wg sync.WaitGroup
-	numWorkers := 4
-	chunkSize := h / numWorkers
-	results := make([]string, numWorkers)
+	var res strings.Builder
 
-	normalisedEndOfChunk := func(i int) int {
-		if i == numWorkers-1 {
-			return h
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		if y > bounds.Min.Y {
+			res.WriteByte('\n')
 		}
-		return (i + 1) * chunkSize
-	}
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			rr, gg, bb, _ := img.At(x, y).RGBA()
+			r, g, b := uint8(rr>>8), uint8(gg>>8), uint8(bb>>8)
 
-	for w := range numWorkers {
-		wg.Add(1)
-		go func(workerID, start, end int) {
-			defer wg.Done()
-			res := ""
-			for i := start; i < end; i++ {
-				for j := range ww {
-					co := img.At(j, i)
-					rr, gg, bb, _ := co.RGBA()
-					r := uint8(rr)
-					g := uint8(gg)
-					b := uint8(bb)
-					hex := rgbToHex(r, g, b)
-					c := characterFromRgb(r, g, b, characters)
-					if hex == "#000000" {
-						s := style.
-							Foreground(lipgloss.Color("#FFFFFF"))
-						if config.SetRandomBlank {
-							res += s.Render(string(characters[rand.IntN(len(characters))]))
-						} else {
-							res += s.Render(string(characters[0]))
-						}
-					} else {
-						var s lipgloss.Style
-
-						if config.OnlyForeground {
-							s = style.
-								Foreground(lipgloss.Color(hex))
-						} else {
-							complementaryHex := rgbToHex(255-r, 255-g, 255-b)
-							s = style.
-								Background(lipgloss.Color(hex)).
-								Foreground(lipgloss.Color(complementaryHex))
-						}
-						res += s.Render(c)
-					}
+			if r == 0 && g == 0 && b == 0 {
+				blank := characters[0]
+				if config.SetRandomBlank {
+					blank = characters[rand.IntN(len(characters))]
 				}
-				res = res + "\n"
+				res.WriteString(blankStyle.Render(string(blank)))
+				continue
 			}
-			results[workerID] = res
-		}(w, w*chunkSize, normalisedEndOfChunk(w))
+
+			var s lipgloss.Style
+			if config.OnlyForeground {
+				s = style.Foreground(lipgloss.Color(rgbToHex(r, g, b)))
+			} else {
+				s = style.
+					Background(lipgloss.Color(rgbToHex(r, g, b))).
+					Foreground(lipgloss.Color(rgbToHex(255-r, 255-g, 255-b)))
+			}
+			res.WriteString(s.Render(characterFromRgb(r, g, b, characters)))
+		}
 	}
 
-	wg.Wait()
-
-	finalResult := ""
-	for _, result := range results {
-		finalResult += result
-	}
-
-	return strings.TrimSuffix(finalResult, "\n")
+	return res.String()
 }
 
 func rgbToHex(r, g, b uint8) string {
