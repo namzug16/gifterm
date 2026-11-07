@@ -46,6 +46,7 @@ $ gifterm <input.gif>
 - **fps**: FPS. Default 12
 - **randomBlank**: Set if a random character from CD should be picked for a blank pixel
 - **ofg**: Only Foreground. Set if only the foreground color should be set
+- **car**: Character Aspect Ratio (cell height / width). Default detected from the terminal, or 2.0 if it can't be detected
 
 #### Examples
 ```

@@ -21,8 +21,14 @@ func main() {
 	characterDensity := flag.String("cd", ".,:-=i|%O#@$X", "Set character density string")
 	randomBlank := flag.Bool("randomBlank", false, "Set if a random character from the character density string should be pick for blank pixels")
 	ofg := flag.Bool("ofg", false, "Only Foreground - Set if only the foregroud color should be set")
+	characterAspectRatioOverride := flag.Float64("car", 0, "Character Aspect Ratio (cell height / width) - Overrides the value detected from the terminal")
 
 	flag.Parse()
+
+	if *characterAspectRatioOverride < 0 {
+		fmt.Println("-car must be greater than 0")
+		os.Exit(1)
+	}
 
 	args := flag.Args()
 
@@ -54,6 +60,10 @@ func main() {
 	// some terminals/multiplexers (e.g. herdr) report 0 pixel size
 	if ws.Xpixel == 0 || ws.Ypixel == 0 {
 		car = 2.0
+	}
+
+	if *characterAspectRatioOverride > 0 {
+		car = *characterAspectRatioOverride
 	}
 
 	windowSizeChan := make(chan tea.WindowSizeMsg)
