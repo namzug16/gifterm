@@ -3,123 +3,77 @@ package main
 import (
 	"context"
 	"image"
-	"image/color"
+	"runtime"
 	"sync"
 
-	"golang.org/x/image/draw"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
-type job struct {
-	Image image.Image
-	Ascii string
+type renderRequest struct {
+	Size       tea.WindowSizeMsg
+	Generation int
+}
+
+type renderedFrame struct {
 	Index int
+	Ascii string
 }
 
-func chanFromImages(imgs []*image.Paletted) <-chan job {
-	out := make(chan job)
-	go func() {
-		correctedImgs := make([]image.Image, len(imgs))
-
-		bounds := imgs[0].Bounds()
-		savedPreviousImg := image.NewRGBA(bounds)
-		draw.Draw(savedPreviousImg, bounds, image.NewUniform(color.Transparent), image.Point{}, draw.Src)
-
-		for i := range imgs {
-			cumulativeImage := image.NewRGBA(bounds)
-			draw.Draw(cumulativeImage, bounds, savedPreviousImg, image.Point{}, draw.Src)
-			frame := imgs[i]
-			draw.Draw(cumulativeImage, bounds, frame, image.Point{}, draw.Over)
-			correctedImgs[i] = cumulativeImage
-			savedPreviousImg = cumulativeImage
-		}
-
-		for i, img := range correctedImgs {
-			job := job{
-				Index: i,
-				Image: img,
-			}
-			out <- job
-		}
-		close(out)
-	}()
-	return out
-}
-
-func worker(
-	ctx context.Context,
-	wg *sync.WaitGroup,
-	jobs <-chan job,
-	result chan<- job,
-	w,
-	h int,
-	car float64,
-	aConfig AsciiConfig,
-) {
-	defer wg.Done()
-	c2 := resizeImages(ctx, jobs, w, h, car)
-	c3 := imagesToAscii(ctx, c2, aConfig)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case j, ok := <-c3:
-			if !ok {
-				return
-			}
-			result <- j
-		}
+// renderOnResize renders every frame for each requested size, cancelling the render of the previous size.
+func renderOnResize(p *tea.Program, requests <-chan renderRequest, images []image.Image, car float64, config AsciiConfig) {
+	cancel := func() {}
+	for request := range requests {
+		cancel()
+		var ctx context.Context
+		ctx, cancel = context.WithCancel(context.Background())
+		go renderFrames(ctx, p, request, images, car, config)
 	}
+	cancel()
 }
 
-func resizeImages(
-	ctx context.Context,
-	input <-chan job,
-	w,
-	h int,
-	car float64,
-) <-chan job {
-	out := make(chan job)
+func renderFrames(ctx context.Context, p *tea.Program, request renderRequest, images []image.Image, car float64, config AsciiConfig) {
+	indexes := make(chan int)
 	go func() {
-		defer close(out)
-		for {
+		defer close(indexes)
+		for i := range images {
 			select {
+			case indexes <- i:
 			case <-ctx.Done():
 				return
-			case job, ok := <-input:
-				if !ok {
-					return
-				}
-
-				job.Image = resizeImage(job.Image, w, h, car)
-				out <- job
 			}
 		}
 	}()
-	return out
-}
 
-func imagesToAscii(
-	ctx context.Context,
-	input <-chan job,
-	aConfig AsciiConfig,
-) <-chan job {
-	out := make(chan job)
-
-	go func() {
-		defer close(out)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case job, ok := <-input:
-				if !ok {
+	results := make(chan renderedFrame)
+	var wg sync.WaitGroup
+	for range runtime.NumCPU() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range indexes {
+				resized := resizeImage(images[i], request.Size.Width, request.Size.Height, car)
+				frame := renderedFrame{Index: i, Ascii: imageToAscii(resized, config)}
+				select {
+				case results <- frame:
+				case <-ctx.Done():
 					return
 				}
-
-				job.Ascii = imageToAscii(job.Image, aConfig)
-				out <- job
 			}
-		}
+		}()
+	}
+	go func() {
+		wg.Wait()
+		close(results)
 	}()
-	return out
+
+	frames := make([]string, len(images))
+	renderedCount := 0
+	for frame := range results {
+		frames[frame.Index] = frame.Ascii
+		renderedCount++
+		p.Send(loadingMsg{Generation: request.Generation, Percentage: renderedCount * 100 / len(images)})
+	}
+
+	// a cancelled render sends partial frames here, the model ignores them because its generation moved on
+	p.Send(processingCompletedMsg{Generation: request.Generation, Frames: frames})
 }

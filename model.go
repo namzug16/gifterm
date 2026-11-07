@@ -9,9 +9,10 @@ import (
 )
 
 type model struct {
-	Frames              map[int]string
+	Frames              []string
 	Size                *tea.WindowSizeMsg
-	WindowSizeChan      chan tea.WindowSizeMsg
+	RenderRequests      chan<- renderRequest
+	RenderGeneration    int
 	CurrentFrameIndex   int
 	LoadingPercentage   int
 	FPS                 int
@@ -22,57 +23,35 @@ type model struct {
 }
 
 func newModel(
-	windowSizeChan chan tea.WindowSizeMsg,
+	renderRequests chan<- renderRequest,
 	fps int,
 	car float64,
 	asciiConfig AsciiConfig,
 ) model {
 	return model{
-		CurrentFrameIndex:   0,
-		Frames:              make(map[int]string),
-		WindowSizeChan:      windowSizeChan,
-		FPS:                 fps,
-		CAR:                 car,
-		AsciiConfiguration:  asciiConfig,
-		ProcessingCompleted: false,
-		Playing:             false,
+		RenderRequests:     renderRequests,
+		FPS:                fps,
+		CAR:                car,
+		AsciiConfiguration: asciiConfig,
 	}
 }
 
-func (m *model) reset() {
-	m.CurrentFrameIndex = 0
-	m.Frames = make(map[int]string)
-	m.Size = nil
-}
-
-func (m *model) loading(p int) {
-	m.CurrentFrameIndex = 0
-	m.Frames = make(map[int]string)
-	m.LoadingPercentage = p
-	m.ProcessingCompleted = false
-	m.Playing = false
-}
-
-func (m *model) setProcessingAsCompleted(oldModel *model) {
-	m.ProcessingCompleted = true
-	m.Size = oldModel.Size
-}
-
-func (m *model) play() {
-	m.Playing = true
-}
+// Messages carry the RenderGeneration they belong to, so the ones from
+// before the latest resize are ignored.
 
 type loadingMsg struct {
-	p int
+	Generation int
+	Percentage int
 }
 
 type processingCompletedMsg struct {
-	m model
+	Generation int
+	Frames     []string
 }
 
-type playMsg struct{}
-
-type frameMsg struct{}
+type frameMsg struct {
+	Generation int
+}
 
 func (m model) Init() tea.Cmd {
 	return nil
@@ -81,51 +60,42 @@ func (m model) Init() tea.Cmd {
 func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := message.(type) {
 	case tea.WindowSizeMsg:
-		m.WindowSizeChan <- msg
+		m.RenderGeneration++
+		m.RenderRequests <- renderRequest{Size: msg, Generation: m.RenderGeneration}
 		m.Size = &msg
-		return m, func() tea.Msg {
-			return loadingMsg{
-				p: 0,
-			}
-		}
+		m.Frames = nil
+		m.CurrentFrameIndex = 0
+		m.LoadingPercentage = 0
+		m.ProcessingCompleted = false
+		m.Playing = false
 
 	case tea.KeyMsg:
 		switch msg.String() {
 		case " ":
-			if m.ProcessingCompleted {
-				return m, func() tea.Msg {
-					return playMsg{}
-				}
+			if m.ProcessingCompleted && !m.Playing {
+				m.Playing = true
+				return m, tick(m.FPS, m.RenderGeneration)
 			}
 		case "q", "esc", "ctrl+c":
 			return m, tea.Quit
 		}
 
-	case processingCompletedMsg:
-		msg.m.setProcessingAsCompleted(&m)
-		return msg.m, nil
-
-	case playMsg:
-		if m.Playing {
-			return m, nil
-		}
-		m.play()
-		return m, func() tea.Msg {
-			return frameMsg{}
-		}
-
 	case loadingMsg:
-		m.loading(msg.p)
-		return m, nil
+		if msg.Generation == m.RenderGeneration {
+			m.LoadingPercentage = msg.Percentage
+		}
+
+	case processingCompletedMsg:
+		if msg.Generation == m.RenderGeneration {
+			m.Frames = msg.Frames
+			m.ProcessingCompleted = true
+		}
 
 	case frameMsg:
-
-		if len(m.Frames) == 0 {
-			return m, nil
+		if msg.Generation == m.RenderGeneration {
+			m.CurrentFrameIndex = (m.CurrentFrameIndex + 1) % len(m.Frames)
+			return m, tick(m.FPS, m.RenderGeneration)
 		}
-
-		m.CurrentFrameIndex = (m.CurrentFrameIndex + 1) % len(m.Frames)
-		return m, tick(m.FPS)
 	}
 
 	return m, nil
@@ -161,8 +131,8 @@ func (m model) View() string {
 	return res
 }
 
-func tick(fps int) tea.Cmd {
+func tick(fps int, generation int) tea.Cmd {
 	return tea.Tick(time.Second/time.Duration(fps), func(t time.Time) tea.Msg {
-		return frameMsg{}
+		return frameMsg{Generation: generation}
 	})
 }

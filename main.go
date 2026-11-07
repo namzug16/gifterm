@@ -1,12 +1,10 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"log"
 	"os"
-	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"golang.org/x/sys/unix"
@@ -88,80 +86,17 @@ func main() {
 		car = *characterAspectRatioOverride
 	}
 
-	windowSizeChan := make(chan tea.WindowSizeMsg)
+	asciiConfig := AsciiConfig{
+		CharacterDensity: *characterDensity,
+		SetRandomBlank:   *randomBlank,
+		OnlyForeground:   *ofg,
+	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	renderRequests := make(chan renderRequest, 1)
 
-	m := newModel(
-		windowSizeChan,
-		*fps,
-		car,
-		AsciiConfig{
-			CharacterDensity: *characterDensity,
-			SetRandomBlank:   *randomBlank,
-			OnlyForeground:   *ofg,
-		},
-	)
+	p := tea.NewProgram(newModel(renderRequests, *fps, car, asciiConfig), tea.WithAltScreen())
 
-	p := tea.NewProgram(m, tea.WithAltScreen())
-
-	go func(m *model) {
-		for size := range windowSizeChan {
-			m.reset()
-			cancel()
-			ctx, cancel = context.WithCancel(context.Background())
-			go func(size tea.WindowSizeMsg) {
-				c1 := chanFromImages(images)
-				results := make(chan job)
-
-				numWorkers := 10
-				var wg sync.WaitGroup
-
-				wg.Add(numWorkers)
-
-				for range numWorkers {
-					go worker(
-						ctx,
-						&wg,
-						c1,
-						results,
-						size.Width,
-						size.Height,
-						m.CAR,
-						m.AsciiConfiguration,
-					)
-				}
-
-				go func() {
-					wg.Wait()
-					close(results)
-				}()
-
-				go func() {
-					frames := make(map[int]string)
-
-					for j := range results {
-						select {
-						case <-ctx.Done():
-							return
-						default:
-							frames[j.Index] = j.Ascii
-							pe := int((float32(len(frames)) / float32(len(images))) * 100)
-							p.Send(loadingMsg{
-								p: pe,
-							})
-						}
-					}
-
-					m.Frames = frames
-
-					p.Send(processingCompletedMsg{
-						m: *m,
-					})
-				}()
-			}(size)
-		}
-	}(&m)
+	go renderOnResize(p, renderRequests, images, car, asciiConfig)
 
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
