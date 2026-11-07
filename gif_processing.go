@@ -20,22 +20,37 @@ func readGif(path string) ([]image.Image, error) {
 		return nil, err
 	}
 
-	return composeFrames(gifImage.Image), nil
+	return composeFrames(gifImage), nil
 }
 
-// composeFrames draws each frame over the previous one, since GIF frames only store what changed.
-func composeFrames(frames []*image.Paletted) []image.Image {
-	bounds := frames[0].Bounds()
-	composed := make([]image.Image, len(frames))
-	previous := image.NewRGBA(bounds)
+// composeFrames draws each frame onto the full GIF canvas, since frames only
+// store what changed, and applies each frame's disposal before the next one.
+func composeFrames(g *gif.GIF) []image.Image {
+	canvas := image.NewRGBA(image.Rect(0, 0, g.Config.Width, g.Config.Height))
+	composed := make([]image.Image, len(g.Image))
 
-	for i, frame := range frames {
-		current := image.NewRGBA(bounds)
-		draw.Draw(current, bounds, previous, bounds.Min, draw.Src)
-		draw.Draw(current, bounds, frame, bounds.Min, draw.Over)
-		composed[i] = current
-		previous = current
+	for i, frame := range g.Image {
+		var canvasBeforeFrame *image.RGBA
+		if g.Disposal[i] == gif.DisposalPrevious {
+			canvasBeforeFrame = cloneRGBA(canvas)
+		}
+
+		draw.Draw(canvas, frame.Bounds(), frame, frame.Bounds().Min, draw.Over)
+		composed[i] = cloneRGBA(canvas)
+
+		switch g.Disposal[i] {
+		case gif.DisposalBackground:
+			draw.Draw(canvas, frame.Bounds(), image.Transparent, image.Point{}, draw.Src)
+		case gif.DisposalPrevious:
+			canvas = canvasBeforeFrame
+		}
 	}
 
 	return composed
+}
+
+func cloneRGBA(img *image.RGBA) *image.RGBA {
+	clone := image.NewRGBA(img.Rect)
+	copy(clone.Pix, img.Pix)
+	return clone
 }
