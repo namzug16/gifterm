@@ -31,11 +31,6 @@ func main() {
 
 	flag.Parse()
 
-	if *characterAspectRatioOverride < 0 {
-		fmt.Println("-car must be greater than 0")
-		os.Exit(1)
-	}
-
 	args := flag.Args()
 
 	if len(args) < 1 {
@@ -45,6 +40,20 @@ func main() {
 	}
 
 	path := args[0]
+
+	// flag stops at the first non-flag argument, so parse again to accept flags after the file
+	flag.CommandLine.Parse(args[1:])
+
+	if flag.NArg() > 0 {
+		fmt.Fprintf(flag.CommandLine.Output(), "Unexpected arguments: %v\n", flag.Args())
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	if *characterAspectRatioOverride < 0 {
+		fmt.Println("-car must be greater than 0")
+		os.Exit(1)
+	}
 
 	if !gifExists(path) {
 		fmt.Printf("GIF %q does not exist or it is not a GIF\n", path)
