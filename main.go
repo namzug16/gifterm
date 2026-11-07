@@ -50,6 +50,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	if *fps <= 0 {
+		fmt.Println("-fps must be greater than 0")
+		os.Exit(1)
+	}
+
+	if *characterDensity == "" {
+		fmt.Println("-cd must not be empty")
+		os.Exit(1)
+	}
+
 	if *characterAspectRatioOverride < 0 {
 		fmt.Println("-car must be greater than 0")
 		os.Exit(1)
