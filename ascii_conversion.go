@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image"
 	"math"
+	"strings"
 	"sync"
 
 	"github.com/charmbracelet/lipgloss"
@@ -90,9 +91,7 @@ func imageToAscii(
 		finalResult += result
 	}
 
-	finalResult = finalResult[:len(finalResult)-2]
-
-	return finalResult
+	return strings.TrimSuffix(finalResult, "\n")
 }
 
 func rgbToHex(r, g, b uint8) string {
