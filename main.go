@@ -2,14 +2,10 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -65,8 +61,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	if !gifExists(path) {
-		fmt.Printf("GIF %q does not exist or it is not a GIF\n", path)
+	images, err := readGif(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Could not read GIF %q: %v\n", path, err)
 		os.Exit(1)
 	}
 
@@ -109,12 +106,6 @@ func main() {
 	p := tea.NewProgram(m, tea.WithAltScreen())
 
 	go func(m *model) {
-		images, err := readGif(path)
-		// FIX: handle error
-		if err != nil {
-			return
-		}
-
 		for size := range windowSizeChan {
 			m.reset()
 			cancel()
@@ -175,35 +166,4 @@ func main() {
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}
-}
-
-func gifExists(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return false
-		}
-		return false
-	}
-	if info.IsDir() {
-		return false
-	}
-
-	if strings.ToLower(filepath.Ext(path)) != ".gif" {
-		return false
-	}
-
-	//NOTE: header check and signature
-	f, err := os.Open(path)
-	if err != nil {
-		return false
-	}
-	defer f.Close()
-
-	buf := make([]byte, 6)
-	if _, err := io.ReadFull(f, buf); err != nil {
-		return false
-	}
-	sig := string(buf)
-	return sig == "GIF87a" || sig == "GIF89a"
 }
