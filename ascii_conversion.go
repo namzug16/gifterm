@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"image"
-	"math"
+	"math/rand/v2"
 	"strings"
 	"sync"
 
@@ -26,6 +26,7 @@ func imageToAscii(
 		return ""
 	}
 
+	characters := []rune(config.CharacterDensity)
 	ww := img.Bounds().Max.X
 	h := img.Bounds().Max.Y
 
@@ -54,14 +55,14 @@ func imageToAscii(
 					g := uint8(gg)
 					b := uint8(bb)
 					hex := rgbToHex(r, g, b)
-					c := characterFromRgb(r, g, b, config.CharacterDensity)
+					c := characterFromRgb(r, g, b, characters)
 					if hex == "#000000" {
 						s := style.
 							Foreground(lipgloss.Color("#FFFFFF"))
 						if config.SetRandomBlank {
-							res += s.Render(getRandomToken(config.CharacterDensity))
+							res += s.Render(string(characters[rand.IntN(len(characters))]))
 						} else {
-							res += s.Render(string(config.CharacterDensity[0]))
+							res += s.Render(string(characters[0]))
 						}
 					} else {
 						var s lipgloss.Style
@@ -98,13 +99,8 @@ func rgbToHex(r, g, b uint8) string {
 	return fmt.Sprintf("#%02x%02x%02x", r, g, b)
 }
 
-func characterFromRgb(r, g, b uint8, cd string) string {
-	avgF := float64(int(r)+int(g)+int(b)) / 3.0
-	avg := uint8(math.Round(avgF))
-	len := len(cd)
-	i := int(mapValue(avg, 0, 255, 0, uint8(len)))
-	if i >= len {
-		i = len - 1
-	}
-	return string(cd[int(i)])
+// characterFromRgb picks a character by brightness, splitting 0-255 into equal buckets.
+func characterFromRgb(r, g, b uint8, characters []rune) string {
+	brightness := (int(r) + int(g) + int(b)) / 3
+	return string(characters[brightness*len(characters)/256])
 }
