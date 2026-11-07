@@ -23,6 +23,12 @@ func main() {
 	ofg := flag.Bool("ofg", false, "Only Foreground - Set if only the foregroud color should be set")
 	characterAspectRatioOverride := flag.Float64("car", 0, "Character Aspect Ratio (cell height / width) - Overrides the value detected from the terminal")
 
+	flag.Usage = func() {
+		fmt.Fprintln(flag.CommandLine.Output(), "Usage: gifterm [flags] <input.gif>")
+		fmt.Fprintln(flag.CommandLine.Output(), "\nFlags:")
+		flag.PrintDefaults()
+	}
+
 	flag.Parse()
 
 	if *characterAspectRatioOverride < 0 {
@@ -33,8 +39,8 @@ func main() {
 	args := flag.Args()
 
 	if len(args) < 1 {
-		fmt.Println("Gif file has not been specified.")
-		fmt.Println("Usage: gifterm <input.gif>")
+		fmt.Fprintln(flag.CommandLine.Output(), "Gif file has not been specified.")
+		flag.Usage()
 		os.Exit(1)
 	}
 
