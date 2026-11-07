@@ -124,28 +124,11 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if m.CurrentFrameIndex < len(m.Frames) {
-			m.CurrentFrameIndex++
-		} else {
-			m.CurrentFrameIndex = 0
-		}
-
-		// NOTE: some gifs can have empty frames so we skipped them
-		if canShowFrame(m) {
-			return m, tick(m.FPS)
-		} else {
-			return m, func() tea.Msg {
-				return frameMsg{}
-			}
-		}
-
+		m.CurrentFrameIndex = (m.CurrentFrameIndex + 1) % len(m.Frames)
+		return m, tick(m.FPS)
 	}
 
 	return m, nil
-}
-
-func canShowFrame(m model) bool {
-	return len(m.Frames[m.CurrentFrameIndex]) > 0
 }
 
 func (m model) View() string {
@@ -171,12 +154,8 @@ func (m model) View() string {
 			res += "Press <space> in order to start playing the gif"
 		}
 		res = style.Render(res)
-	} else if len(m.Frames) == m.CurrentFrameIndex {
-		frame := m.Frames[m.CurrentFrameIndex]
-		res += frame
 	} else {
-		frame := m.Frames[m.CurrentFrameIndex]
-		res += frame
+		res += m.Frames[m.CurrentFrameIndex]
 	}
 
 	return res
