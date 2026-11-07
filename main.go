@@ -51,6 +51,11 @@ func main() {
 
 	car := ch / cw
 
+	// some terminals/multiplexers (e.g. herdr) report 0 pixel size
+	if ws.Xpixel == 0 || ws.Ypixel == 0 {
+		car = 2.0
+	}
+
 	windowSizeChan := make(chan tea.WindowSizeMsg)
 
 	ctx, cancel := context.WithCancel(context.Background())
