@@ -90,18 +90,15 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyMsg:
-		switch msg.Type {
-		case tea.KeySpace:
+		switch msg.String() {
+		case " ":
 			if m.ProcessingCompleted {
 				return m, func() tea.Msg {
 					return playMsg{}
 				}
 			}
-		case tea.KeyRunes:
-			switch msg.String() {
-			case "q", "esc", "ctrl+c":
-				return m, tea.Quit
-			}
+		case "q", "esc", "ctrl+c":
+			return m, tea.Quit
 		}
 
 	case processingCompletedMsg:
