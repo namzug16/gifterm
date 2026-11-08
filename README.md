@@ -14,6 +14,14 @@ GIFs on the terminal
 
 ## Installation
 
+### Homebrew (macOS and Linux)
+
+```
+$ brew install namzug16/tap/gifterm
+```
+
+### From source
+
 Clone the repository 
 
 ```
