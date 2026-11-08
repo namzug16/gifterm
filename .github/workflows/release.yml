@@ -1,0 +1,47 @@
+name: Release
+
+# Pushing a tag like v0.2.0 tests that commit, builds the binaries and
+# publishes them as a GitHub release, then updates the Homebrew tap.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Check the tag matches the version constant
+        run: grep -qx "const version = \"${TAG#v}\"" main.go
+      - run: go vet ./...
+      - run: go test ./...
+      - run: make release-artifacts
+      - name: Publish the GitHub release
+        run: |
+          awk -v heading="## ${TAG#v} " '/^## / { in_section = index($0, heading) == 1; next } in_section' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          test -s "$RUNNER_TEMP/notes.md" || { echo "CHANGELOG.md has no section for ${TAG#v}"; exit 1; }
+          gh release create "$TAG" dist/* --title "gifterm ${TAG#v}" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Update the Homebrew tap
+        run: |
+          git clone "https://x-access-token:$HOMEBREW_TAP_TOKEN@github.com/namzug16/homebrew-tap.git" "$RUNNER_TEMP/tap"
+          mkdir -p "$RUNNER_TEMP/tap/Formula"
+          sh scripts/homebrew-formula.sh "${TAG#v}" dist > "$RUNNER_TEMP/tap/Formula/gifterm.rb"
+          cd "$RUNNER_TEMP/tap"
+          git add Formula/gifterm.rb
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "gifterm ${TAG#v}"
+          git push
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
