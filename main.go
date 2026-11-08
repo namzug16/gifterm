@@ -11,7 +11,7 @@ import (
 )
 
 // version must match the release tag without the leading "v"; the release workflow checks it.
-const version = "0.1.0"
+const version = "0.2.0"
 
 func main() {
 	printVersion := flag.Bool("version", false, "Print the version and exit")

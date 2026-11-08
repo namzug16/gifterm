@@ -2,6 +2,14 @@
 
 Each release's section is published as its GitHub release notes.
 
+## 0.2.0 - 2026-11-08
+
+- `gifterm <giphy-url>` downloads and plays a GIF straight from Giphy, e.g.
+  `gifterm https://giphy.com/gifs/anime-chainsaw-man-reze-IKFVtPf8jP6KJH16dB`. Giphy page links,
+  `i.giphy.com/<id>.gif` and `media.giphy.com/.../giphy.gif` links are supported.
+- URLs from other websites, unsupported Giphy pages, non-GIF files, GIFs that don't exist and
+  downloads over 50 MB fail with a clear error.
+
 ## 0.1.0 - 2026-11-08
 
 The first release, for macOS and Linux on arm64 and amd64.
