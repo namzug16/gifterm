@@ -2,6 +2,12 @@
 
 Each release's section is published as its GitHub release notes.
 
+## 0.3.0 - 2026-11-08
+
+- `-fit` controls how the GIF fills the terminal, using the CSS `object-fit` values:
+  `contain` (default, the whole GIF with black bars), `cover` (fills the terminal, cropping the
+  edges) and `fill` (stretches to the terminal size). Unknown values fail with a clear error.
+
 ## 0.2.0 - 2026-11-08
 
 - `gifterm <giphy-url>` downloads and plays a GIF straight from Giphy, e.g.
