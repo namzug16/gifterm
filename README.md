@@ -65,6 +65,10 @@ Supported formats are `https://giphy.com/gifs/<name>-<id>`, `https://i.giphy.com
 - **randomBlank**: Set if a random character from CD should be picked for a blank pixel
 - **ofg**: Only Foreground. Set if only the foreground color should be set
 - **car**: Character Aspect Ratio (cell height / width). Default detected from the terminal, or 2.0 if it can't be detected
+- **fit**: How the GIF fills the terminal, using the CSS `object-fit` values. Default `contain`
+  - `contain`: show the whole GIF keeping its aspect ratio, with black bars on the free space
+  - `cover`: fill the whole terminal keeping its aspect ratio, cropping the overflowing edges
+  - `fill`: stretch the GIF to the terminal size, ignoring its aspect ratio
 
 #### Examples
 ```
@@ -76,6 +80,10 @@ $ gifterm -cd ".,:-=i|%O#@$X" -fps 12 -randomBlank <input.gif>
 $ gifterm -fps 16 -ofg <input.gif> 
 ```
 <img src="./assets/gifterm_ofg.gif" alt="Gifterm demo" style="width: 100%;">
+
+```
+$ gifterm -fit cover <input.gif> 
+```
 
 ## How to convert a video into a GIF
 
