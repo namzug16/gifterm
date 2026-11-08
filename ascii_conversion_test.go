@@ -1,6 +1,37 @@
 package main
 
-import "testing"
+import (
+	"image"
+	"image/color"
+	"strings"
+	"testing"
+)
+
+func TestImageToAsciiEmitsTrueColor(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	img.Set(0, 0, color.RGBA{R: 255, A: 255})
+
+	got := imageToAscii(img, AsciiConfig{CharacterDensity: " .#"})
+
+	// Background is the pixel color, foreground its inverse.
+	if !strings.Contains(got, "48;2;255;0;0") || !strings.Contains(got, "38;2;0;255;255") {
+		t.Fatalf("expected truecolor escapes, got %q", got)
+	}
+}
+
+func BenchmarkImageToAscii(b *testing.B) {
+	img := image.NewRGBA(image.Rect(0, 0, 200, 60))
+	for y := range 60 {
+		for x := range 200 {
+			img.Set(x, y, color.RGBA{R: uint8(x), G: uint8(y * 4), B: uint8(x + y), A: 255})
+		}
+	}
+	config := AsciiConfig{CharacterDensity: " .:-=+*#%@"}
+
+	for b.Loop() {
+		imageToAscii(img, config)
+	}
+}
 
 func TestCharacterFromRgb(t *testing.T) {
 	characters := []rune(" ░▒▓█")
