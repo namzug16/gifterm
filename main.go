@@ -10,7 +10,11 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// version must match the release tag without the leading "v"; the release workflow checks it.
+const version = "0.1.0"
+
 func main() {
+	printVersion := flag.Bool("version", false, "Print the version and exit")
 	fps := flag.Int("fps", 12, "FPS")
 	characterDensity := flag.String("cd", ".,:-=i|%O#@$X", "Set character density string")
 	randomBlank := flag.Bool("randomBlank", false, "Set if a random character from the character density string should be pick for blank pixels")
@@ -24,6 +28,11 @@ func main() {
 	}
 
 	flag.Parse()
+
+	if *printVersion {
+		fmt.Println(version)
+		return
+	}
 
 	args := flag.Args()
 
