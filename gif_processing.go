@@ -3,19 +3,35 @@ package main
 import (
 	"image"
 	"image/gif"
+	"io"
 	"os"
 
 	"golang.org/x/image/draw"
 )
 
-func readGif(path string) ([]image.Image, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
+// readGif reads a local GIF file, or downloads it when source is a URL.
+func readGif(source string) ([]image.Image, error) {
+	var gifReader io.Reader
 
-	gifImage, err := gif.DecodeAll(file)
+	if isRemoteGifSource(source) {
+		gifURL, err := resolveGiphyGifURL(source)
+		if err != nil {
+			return nil, err
+		}
+		gifReader, err = downloadGif(gifURL)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		file, err := os.Open(source)
+		if err != nil {
+			return nil, err
+		}
+		defer file.Close()
+		gifReader = file
+	}
+
+	gifImage, err := gif.DecodeAll(gifReader)
 	if err != nil {
 		return nil, err
 	}

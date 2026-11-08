@@ -22,7 +22,7 @@ func main() {
 	characterAspectRatioOverride := flag.Float64("car", 0, "Character Aspect Ratio (cell height / width) - Overrides the value detected from the terminal")
 
 	flag.Usage = func() {
-		fmt.Fprintln(flag.CommandLine.Output(), "Usage: gifterm [flags] <input.gif>")
+		fmt.Fprintln(flag.CommandLine.Output(), "Usage: gifterm [flags] <input.gif | giphy-url>")
 		fmt.Fprintln(flag.CommandLine.Output(), "\nFlags:")
 		flag.PrintDefaults()
 	}
@@ -37,7 +37,7 @@ func main() {
 	args := flag.Args()
 
 	if len(args) < 1 {
-		fmt.Fprintln(flag.CommandLine.Output(), "Gif file has not been specified.")
+		fmt.Fprintln(flag.CommandLine.Output(), "Gif file or Giphy URL has not been specified.")
 		flag.Usage()
 		os.Exit(1)
 	}

@@ -48,6 +48,16 @@ Just make sure to have installed and setup the minimum required version of Go. Y
 $ gifterm <input.gif>
 ```
 
+### Giphy URLs
+
+Pass a Giphy URL instead of a file and gifterm downloads the GIF for you:
+
+```
+$ gifterm https://giphy.com/gifs/anime-chainsaw-man-reze-IKFVtPf8jP6KJH16dB
+```
+
+Supported formats are `https://giphy.com/gifs/<name>-<id>`, `https://i.giphy.com/<id>.gif` and `https://media.giphy.com/media/<id>/giphy.gif`. URLs from other websites are rejected.
+
 ### Flags
 
 - **cd**: Character Density. Default ".,:-=i|%O#@$X"
