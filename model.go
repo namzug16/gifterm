@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 type model struct {
@@ -69,9 +69,9 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.ProcessingCompleted = false
 		m.Playing = false
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
-		case " ":
+		case "space":
 			if m.ProcessingCompleted && !m.Playing {
 				m.Playing = true
 				return m, tick(m.FPS, m.RenderGeneration)
@@ -101,7 +101,13 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) View() string {
+func (m model) View() tea.View {
+	view := tea.NewView(m.content())
+	view.AltScreen = true
+	return view
+}
+
+func (m model) content() string {
 	res := ""
 
 	if !m.Playing {

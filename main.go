@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"golang.org/x/sys/unix"
 )
 
@@ -94,7 +94,7 @@ func main() {
 
 	renderRequests := make(chan renderRequest, 1)
 
-	p := tea.NewProgram(newModel(renderRequests, *fps, car, asciiConfig), tea.WithAltScreen())
+	p := tea.NewProgram(newModel(renderRequests, *fps, car, asciiConfig))
 
 	go renderOnResize(p, renderRequests, images, car, asciiConfig)
 

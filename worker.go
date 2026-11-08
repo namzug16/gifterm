@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"sync"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 type renderRequest struct {
