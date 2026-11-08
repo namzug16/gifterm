@@ -20,18 +20,18 @@ type renderedFrame struct {
 }
 
 // renderOnResize renders every frame for each requested size, cancelling the render of the previous size.
-func renderOnResize(p *tea.Program, requests <-chan renderRequest, images []image.Image, car float64, config AsciiConfig) {
+func renderOnResize(p *tea.Program, requests <-chan renderRequest, images []image.Image, car float64, fit ObjectFit, config AsciiConfig) {
 	cancel := func() {}
 	for request := range requests {
 		cancel()
 		var ctx context.Context
 		ctx, cancel = context.WithCancel(context.Background())
-		go renderFrames(ctx, p, request, images, car, config)
+		go renderFrames(ctx, p, request, images, car, fit, config)
 	}
 	cancel()
 }
 
-func renderFrames(ctx context.Context, p *tea.Program, request renderRequest, images []image.Image, car float64, config AsciiConfig) {
+func renderFrames(ctx context.Context, p *tea.Program, request renderRequest, images []image.Image, car float64, fit ObjectFit, config AsciiConfig) {
 	indexes := make(chan int)
 	go func() {
 		defer close(indexes)
@@ -51,7 +51,7 @@ func renderFrames(ctx context.Context, p *tea.Program, request renderRequest, im
 		go func() {
 			defer wg.Done()
 			for i := range indexes {
-				resized := resizeImage(images[i], request.Size.Width, request.Size.Height, car)
+				resized := resizeImage(images[i], request.Size.Width, request.Size.Height, car, fit)
 				frame := renderedFrame{Index: i, Ascii: imageToAscii(resized, config)}
 				select {
 				case results <- frame:

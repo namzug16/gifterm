@@ -17,6 +17,7 @@ type model struct {
 	LoadingPercentage   int
 	FPS                 int
 	CAR                 float64
+	Fit                 ObjectFit
 	AsciiConfiguration  AsciiConfig
 	ProcessingCompleted bool
 	Playing             bool
@@ -26,12 +27,14 @@ func newModel(
 	renderRequests chan<- renderRequest,
 	fps int,
 	car float64,
+	fit ObjectFit,
 	asciiConfig AsciiConfig,
 ) model {
 	return model{
 		RenderRequests:     renderRequests,
 		FPS:                fps,
 		CAR:                car,
+		Fit:                fit,
 		AsciiConfiguration: asciiConfig,
 	}
 }
@@ -126,6 +129,7 @@ func (m model) content() string {
 		res += "Random Blank: " + fmt.Sprint(m.AsciiConfiguration.SetRandomBlank) + "\n"
 		res += "FPS: " + fmt.Sprint(m.FPS) + "\n"
 		res += "Cell Aspect Ratio: " + fmt.Sprint(m.CAR) + "\n"
+		res += "Fit: " + string(m.Fit) + "\n"
 		if m.ProcessingCompleted {
 			res += "Press <space> in order to start playing the gif"
 		}

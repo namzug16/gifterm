@@ -8,7 +8,7 @@ import (
 )
 
 func newTestModel() model {
-	return newModel(make(chan renderRequest, 1), 10, 2, AsciiConfig{CharacterDensity: " .#"})
+	return newModel(make(chan renderRequest, 1), 10, 2, ObjectFitContain, AsciiConfig{CharacterDensity: " .#"})
 }
 
 func TestSpaceStartsPlaybackOnlyAfterProcessing(t *testing.T) {
@@ -53,7 +53,7 @@ func TestQuitKeys(t *testing.T) {
 
 func TestWindowSizeRequestsRender(t *testing.T) {
 	requests := make(chan renderRequest, 1)
-	m := newModel(requests, 10, 2, AsciiConfig{})
+	m := newModel(requests, 10, 2, ObjectFitContain, AsciiConfig{})
 	m.Playing = true
 
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})

@@ -20,6 +20,7 @@ func main() {
 	randomBlank := flag.Bool("randomBlank", false, "Set if a random character from the character density string should be pick for blank pixels")
 	ofg := flag.Bool("ofg", false, "Only Foreground - Set if only the foregroud color should be set")
 	characterAspectRatioOverride := flag.Float64("car", 0, "Character Aspect Ratio (cell height / width) - Overrides the value detected from the terminal")
+	fitValue := flag.String("fit", string(ObjectFitContain), "How the gif fills the terminal, like CSS object-fit: contain, cover, fill")
 
 	flag.Usage = func() {
 		fmt.Fprintln(flag.CommandLine.Output(), "Usage: gifterm [flags] <input.gif | giphy-url>")
@@ -68,6 +69,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	fit, err := parseObjectFit(*fitValue)
+	if err != nil {
+		fmt.Println("-fit:", err)
+		os.Exit(1)
+	}
+
 	images, err := readGif(path)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not read GIF %q: %v\n", path, err)
@@ -103,9 +110,9 @@ func main() {
 
 	renderRequests := make(chan renderRequest, 1)
 
-	p := tea.NewProgram(newModel(renderRequests, *fps, car, asciiConfig))
+	p := tea.NewProgram(newModel(renderRequests, *fps, car, fit, asciiConfig))
 
-	go renderOnResize(p, renderRequests, images, car, asciiConfig)
+	go renderOnResize(p, renderRequests, images, car, fit, asciiConfig)
 
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
